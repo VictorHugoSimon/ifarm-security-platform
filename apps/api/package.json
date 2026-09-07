@@ -1,0 +1,20 @@
+{
+  "name": "@ifarm-security/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.9.0",
+    "@ifarm-security/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260907.1",
+    "typescript": "^5.9.0",
+    "wrangler": "^4.0.0"
+  }
+}

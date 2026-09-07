@@ -1,0 +1,10 @@
+name = "ifarm-security-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[vars]
+APP_ENV = "dev"
+APP_NAME = "iFarm Security"
+
+# DATABASE_URL deve ser configurada como secret.
+# Nenhum binding de outro projeto pode ser reutilizado.
