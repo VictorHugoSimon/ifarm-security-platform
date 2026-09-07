@@ -1,7 +1,7 @@
 {
   "name": "@ifarm-security/web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@neondatabase/neon-js": "0.7.0-beta",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
