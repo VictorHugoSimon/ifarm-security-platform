@@ -1,3 +1,7 @@
+import { useEffect, useState } from 'react';
+import { AuthGate } from './AuthGate';
+import { neon } from './lib/neon';
+
 const modules = [
   ['Mapa de Segurança', 'Propriedades, vias, câmeras e incidentes'],
   ['Câmeras', 'Status online/offline e pontos autorizados'],
@@ -7,7 +11,41 @@ const modules = [
   ['Community', 'Segurança compartilhada do bairro']
 ];
 
-export function App() {
+type Organization = { id: string; name: string; status: string };
+
+function Dashboard() {
+  const session = neon.auth.useSession();
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [accessMessage, setAccessMessage] = useState('Carregando permissões…');
+  const [activating, setActivating] = useState(false);
+
+  async function loadAccess() {
+    const result = await neon.from('organizations').select('id,name,status');
+    if (result.error) {
+      setAccessMessage('Não foi possível consultar as permissões.');
+      return;
+    }
+    const rows = (result.data || []) as Organization[];
+    setOrganizations(rows);
+    setAccessMessage(rows.length ? `${rows.length} organização(ões) autorizada(s)` : 'Conta autenticada, mas sem acesso ativado.');
+  }
+
+  async function claimAccess() {
+    setActivating(true);
+    try {
+      const result = await neon.rpc('claim_my_invited_access');
+      if (result.error) {
+        setAccessMessage('A ativação exige convite válido e e-mail verificado.');
+      } else {
+        await loadAccess();
+      }
+    } finally {
+      setActivating(false);
+    }
+  }
+
+  useEffect(() => { void loadAccess(); }, []);
+
   return (
     <div className="shell">
       <aside>
@@ -24,11 +62,19 @@ export function App() {
             <span className="eyebrow">CENTRAL DE SEGURANÇA RURAL</span>
             <h1>Visão Geral</h1>
           </div>
-          <span className="status">● Plataforma operacional</span>
+          <div className="header-actions">
+            <span className="status">● Sessão autenticada</span>
+            <button className="secondary" onClick={() => void neon.auth.signOut()}>Sair</button>
+          </div>
         </header>
+        <section className="identity-strip">
+          <div><small>USUÁRIO</small><strong>{session.data?.user.email}</strong></div>
+          <div><small>ACESSO</small><strong>{accessMessage}</strong></div>
+          {!organizations.length && <button className="primary compact" onClick={() => void claimAccess()} disabled={activating}>{activating ? 'Ativando…' : 'Ativar convite'}</button>}
+        </section>
         <section className="metrics">
-          <article><span>Propriedades</span><b>—</b><small>aguardando piloto</small></article>
-          <article><span>Câmeras</span><b>—</b><small>nenhum dispositivo</small></article>
+          <article><span>Organizações</span><b>{organizations.length || '—'}</b><small>com acesso RLS</small></article>
+          <article><span>Propriedades</span><b>—</b><small>escopo do tenant</small></article>
           <article><span>Alertas críticos</span><b>0</b><small>últimas 24h</small></article>
           <article><span>Uptime</span><b>—</b><small>telemetria pendente</small></article>
         </section>
@@ -39,10 +85,14 @@ export function App() {
           </div>
         </section>
         <section className="notice">
-          <strong>Ambiente inicial</strong>
-          <p>Base técnica criada. Dados reais, vídeo e integrações externas permanecem desabilitados até configuração e autorização específicas.</p>
+          <strong>Security by Design</strong>
+          <p>O portal consulta somente linhas autorizadas por RLS. Câmeras privadas e dados comunitários permanecem separados por escopo de organização, bairro e propriedade.</p>
         </section>
       </main>
     </div>
   );
+}
+
+export function App() {
+  return <AuthGate><Dashboard /></AuthGate>;
 }
