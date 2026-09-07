@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AuthGate } from './AuthGate';
+import { RuralStructure } from './RuralStructure';
 import { neon } from './lib/neon';
 
 const modules = [
@@ -51,7 +52,7 @@ function Dashboard() {
       <aside>
         <div className="brand">iFARM <strong>SECURITY</strong></div>
         <nav>
-          {['Visão Geral','Mapa','Câmeras','Eventos','Incidentes','Ativos','Bairro','Configurações'].map((item, i) =>
+          {['Visão Geral','Estrutura Rural','Mapa','Câmeras','Eventos','Incidentes','Ativos','Bairro','Configurações'].map((item, i) =>
             <button key={item} className={i===0?'active':''}>{item}</button>
           )}
         </nav>
@@ -74,10 +75,11 @@ function Dashboard() {
         </section>
         <section className="metrics">
           <article><span>Organizações</span><b>{organizations.length || '—'}</b><small>com acesso RLS</small></article>
-          <article><span>Propriedades</span><b>—</b><small>escopo do tenant</small></article>
+          <article><span>Estrutura rural</span><b>3</b><small>níveis iniciais ativos</small></article>
           <article><span>Alertas críticos</span><b>0</b><small>últimas 24h</small></article>
           <article><span>Uptime</span><b>—</b><small>telemetria pendente</small></article>
         </section>
+        <RuralStructure />
         <section>
           <h2>Módulos do MVP</h2>
           <div className="grid">
