@@ -1,3 +1,4 @@
+import { neon } from '@neondatabase/serverless';
 import { Hono } from 'hono';
 
 type Bindings = {
@@ -6,7 +7,31 @@ type Bindings = {
   DATABASE_URL?: string;
 };
 
+type HeartbeatStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
+
+type HeartbeatBody = {
+  eventId?: string;
+  status?: HeartbeatStatus;
+  sourceAt?: string;
+  batteryPct?: number;
+  signalRssi?: number;
+  connectionType?: string;
+  metadata?: Record<string, unknown>;
+};
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const VALID_STATUS = new Set<HeartbeatStatus>(['online', 'offline', 'degraded', 'maintenance']);
 const app = new Hono<{ Bindings: Bindings }>();
+
+async function sha256Hex(value: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function deviceKeyFromAuthorization(value?: string) {
+  if (!value?.startsWith('Device ')) return '';
+  return value.slice('Device '.length).trim();
+}
 
 app.get('/health', (c) => c.json({
   ok: true,
@@ -17,10 +42,90 @@ app.get('/health', (c) => c.json({
 
 app.get('/api/v1/system/status', (c) => c.json({
   product: c.env.APP_NAME,
-  modules: ['identity','map','devices','events','incidents','assets','community'],
+  modules: ['identity','map','devices','telemetry','events','incidents','assets','community'],
   databaseConfigured: Boolean(c.env.DATABASE_URL),
   governmentIntegration: false,
   biometricMatching: false
 }));
 
-export default app;
+app.post('/api/v1/ingest/devices/:deviceId/heartbeat', async (c) => {
+  if (!c.env.DATABASE_URL) return c.json({ error: 'service_not_configured' }, 503);
+
+  const deviceId = c.req.param('deviceId');
+  if (!UUID_PATTERN.test(deviceId)) return c.json({ error: 'invalid_device_id' }, 400);
+
+  const contentLength = Number(c.req.header('content-length') || '0');
+  if (Number.isFinite(contentLength) && contentLength > 32768) return c.json({ error: 'payload_too_large' }, 413);
+
+  const rawKey = deviceKeyFromAuthorization(c.req.header('authorization'));
+  if (rawKey.length < 32 || rawKey.length > 200) return c.json({ error: 'unauthorized' }, 401);
+
+  let body: HeartbeatBody;
+  try {
+    body = await c.req.json<HeartbeatBody>();
+  } catch {
+    return c.json({ error: 'invalid_json' }, 400);
+  }
+
+  const status = body.status;
+  if (!status || !VALID_STATUS.has(status)) return c.json({ error: 'invalid_status' }, 400);
+  if (body.eventId !== undefined && (!body.eventId || body.eventId.length > 128)) return c.json({ error: 'invalid_event_id' }, 400);
+  if (body.batteryPct !== undefined && (!Number.isFinite(body.batteryPct) || body.batteryPct < 0 || body.batteryPct > 100)) return c.json({ error: 'invalid_battery' }, 400);
+  if (body.signalRssi !== undefined && (!Number.isInteger(body.signalRssi) || body.signalRssi < -200 || body.signalRssi > 0)) return c.json({ error: 'invalid_signal' }, 400);
+  if (body.connectionType !== undefined && body.connectionType.length > 32) return c.json({ error: 'invalid_connection_type' }, 400);
+
+  let sourceAt: string | null = null;
+  if (body.sourceAt) {
+    const parsed = new Date(body.sourceAt);
+    if (Number.isNaN(parsed.valueOf()) || parsed.valueOf() > Date.now() + 10 * 60 * 1000) return c.json({ error: 'invalid_source_at' }, 400);
+    sourceAt = parsed.toISOString();
+  }
+
+  const metadata = body.metadata && !Array.isArray(body.metadata) ? body.metadata : {};
+  const metadataJson = JSON.stringify(metadata);
+  if (new TextEncoder().encode(metadataJson).byteLength > 8192) return c.json({ error: 'metadata_too_large' }, 413);
+
+  try {
+    const keyHash = await sha256Hex(rawKey);
+    const sql = neon(c.env.DATABASE_URL);
+    const rows = await sql`
+      select * from public.ingest_device_heartbeat(
+        ${deviceId}::uuid,
+        ${keyHash}::text,
+        ${body.eventId ?? null}::text,
+        ${status}::device_status,
+        ${sourceAt}::timestamptz,
+        ${body.batteryPct ?? null}::numeric,
+        ${body.signalRssi ?? null}::integer,
+        ${body.connectionType ?? null}::text,
+        ${metadataJson}::jsonb
+      )
+    `;
+    const row = rows[0] as { accepted: boolean; current_status: string; received_at: string; transition: string } | undefined;
+    if (!row) return c.json({ error: 'ingest_failed' }, 500);
+    return c.json({ accepted: row.accepted, status: row.current_status, receivedAt: row.received_at, transition: row.transition }, 202);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('invalid_device_key')) return c.json({ error: 'unauthorized' }, 401);
+    if (message.includes('source_time_in_future') || message.includes('invalid_')) return c.json({ error: 'invalid_heartbeat' }, 400);
+    console.error('heartbeat_ingest_failed');
+    return c.json({ error: 'internal_error' }, 500);
+  }
+});
+
+async function reconcileStaleDevices(env: Bindings) {
+  if (!env.DATABASE_URL) return;
+  const sql = neon(env.DATABASE_URL);
+  await sql`select public.reconcile_stale_devices()`;
+}
+
+const handler: ExportedHandler<Bindings> = {
+  fetch(request, env, ctx) {
+    return app.fetch(request, env, ctx);
+  },
+  scheduled(_controller, env, ctx) {
+    ctx.waitUntil(reconcileStaleDevices(env));
+  }
+};
+
+export default handler;

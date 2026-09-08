@@ -1,7 +1,7 @@
 {
   "name": "@ifarm-security/api",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
@@ -9,8 +9,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "hono": "^4.9.0",
-    "@ifarm-security/contracts": "workspace:*"
+    "@ifarm-security/contracts": "workspace:*",
+    "@neondatabase/serverless": "^1.0.0",
+    "hono": "^4.9.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260907.1",
