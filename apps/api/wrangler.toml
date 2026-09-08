@@ -6,5 +6,8 @@ compatibility_date = "2026-09-01"
 APP_ENV = "dev"
 APP_NAME = "iFarm Security"
 
-# DATABASE_URL deve ser configurada como secret.
-# Nenhum binding de outro projeto pode ser reutilizado.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# DATABASE_URL deve ser configurada como secret exclusivo do iFarm Security.
+# Nenhum binding, token ou secret de outro projeto pode ser reutilizado.
