@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { AuthGate } from './AuthGate';
 import { DeviceSetup } from './DeviceSetup';
 import { RuralStructure } from './RuralStructure';
+import { SecurityMap } from './SecurityMap';
 import { neon } from './lib/neon';
 
 const modules = [
-  ['Mapa de Segurança', 'Propriedades, vias, câmeras e incidentes'],
+  ['Mapa de Segurança', 'Propriedades, áreas, dispositivos e incidentes georreferenciados'],
   ['Câmeras', 'Status online/offline e pontos autorizados'],
   ['Eventos', 'Detecções, severidade e validação'],
   ['Incidentes', 'Ocorrências, ações e auditoria'],
@@ -43,8 +44,8 @@ function Dashboard() {
   return <div className="shell"><aside><div className="brand">iFARM <strong>SECURITY</strong></div><nav>{['Visão Geral','Estrutura Rural','Dispositivos','Mapa','Câmeras','Eventos','Incidentes','Ativos','Bairro','Configurações'].map((item, i) => <button key={item} className={i===0?'active':''}>{item}</button>)}</nav></aside><main>
     <header><div><span className="eyebrow">CENTRAL DE SEGURANÇA RURAL</span><h1>Visão Geral</h1></div><div className="header-actions"><span className="status">● Sessão autenticada</span><button className="secondary" onClick={() => void neon.auth.signOut()}>Sair</button></div></header>
     <section className="identity-strip"><div><small>USUÁRIO</small><strong>{session.data?.user.email}</strong></div><div><small>ACESSO</small><strong>{accessMessage}</strong></div>{!organizations.length && <button className="primary compact" onClick={() => void claimAccess()} disabled={activating}>{activating ? 'Ativando…' : 'Ativar convite'}</button>}</section>
-    <section className="metrics"><article><span>Organizações</span><b>{organizations.length || '—'}</b><small>com acesso RLS</small></article><article><span>Estrutura rural</span><b>5</b><small>até área/equipamento</small></article><article><span>Alertas críticos</span><b>0</b><small>últimas 24h</small></article><article><span>Uptime</span><b>—</b><small>telemetria pendente</small></article></section>
-    <RuralStructure /><DeviceSetup />
+    <section className="metrics"><article><span>Organizações</span><b>{organizations.length || '—'}</b><small>com acesso RLS</small></article><article><span>Estrutura rural</span><b>5</b><small>até área/equipamento</small></article><article><span>Security Map</span><b>DEV</b><small>PostGIS + RLS</small></article><article><span>Uptime</span><b>—</b><small>telemetria pendente</small></article></section>
+    <RuralStructure /><DeviceSetup /><SecurityMap />
     <section><h2>Módulos do MVP</h2><div className="grid">{modules.map(([title, text]) => <article className="module" key={title}><h3>{title}</h3><p>{text}</p></article>)}</div></section>
     <section className="notice"><strong>Security by Design</strong><p>O portal consulta somente linhas autorizadas por RLS. Câmeras privadas e dados comunitários permanecem separados por escopo de organização, bairro e propriedade.</p></section>
   </main></div>;
