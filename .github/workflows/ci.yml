@@ -35,6 +35,8 @@ jobs:
         run: pnpm migrations:check
       - name: RBAC invariants
         run: pnpm rbac:check
+      - name: Auth readiness invariants
+        run: pnpm auth:check
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
       - name: Automated tests

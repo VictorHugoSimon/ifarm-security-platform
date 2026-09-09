@@ -9,6 +9,7 @@
     "security:check": "node scripts/security-check.mjs",
     "migrations:check": "node scripts/migration-check.mjs",
     "rbac:check": "node scripts/rbac-check.mjs",
+    "auth:check": "node scripts/auth-readiness-check.mjs",
     "test": "pnpm -r --if-present test",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck"
