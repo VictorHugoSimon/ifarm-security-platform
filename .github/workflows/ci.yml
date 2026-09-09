@@ -33,6 +33,8 @@ jobs:
         run: pnpm security:check
       - name: Migration inventory
         run: pnpm migrations:check
+      - name: RBAC invariants
+        run: pnpm rbac:check
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
       - name: Automated tests
