@@ -10,6 +10,8 @@
     "migrations:check": "node scripts/migration-check.mjs",
     "rbac:check": "node scripts/rbac-check.mjs",
     "auth:check": "node scripts/auth-readiness-check.mjs",
+    "deploy:check": "node scripts/deploy-readiness-check.mjs",
+    "stage:smoke": "node scripts/stage-smoke.mjs",
     "test": "pnpm -r --if-present test",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck"
