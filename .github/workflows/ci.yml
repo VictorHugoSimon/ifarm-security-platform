@@ -26,6 +26,16 @@ jobs:
         with:
           node-version: 24
 
+      - name: Repository visibility notice
+        shell: bash
+        run: |
+          if [ "${{ github.event.repository.visibility }}" != "private" ]; then
+            echo "::warning::Repository is not private. Deploy/secrets must remain blocked."
+          fi
+
+      - name: Security check
+        run: pnpm security:check
+
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
