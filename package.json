@@ -6,10 +6,9 @@
   "scripts": {
     "dev:web": "pnpm --filter @ifarm-security/web dev",
     "dev:api": "pnpm --filter @ifarm-security/api dev",
+    "security:check": "node scripts/security-check.mjs",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck"
   },
-  "engines": {
-    "node": ">=24"
-  }
+  "engines": { "node": ">=24" }
 }
