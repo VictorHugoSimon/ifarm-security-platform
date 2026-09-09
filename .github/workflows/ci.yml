@@ -15,32 +15,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.0.0
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-
       - name: Repository visibility notice
         shell: bash
         run: |
           if [ "${{ github.event.repository.visibility }}" != "private" ]; then
             echo "::warning::Repository is not private. Deploy/secrets must remain blocked."
           fi
-
       - name: Security check
         run: pnpm security:check
-
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
-
+      - name: Automated tests
+        run: pnpm test
       - name: Typecheck
         run: pnpm typecheck
-
       - name: Build
         run: pnpm build

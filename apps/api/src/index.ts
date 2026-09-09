@@ -9,7 +9,7 @@ type AssetPositionBody = { deviceId: string; eventId?: string; recordedAt?: stri
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VALID_STATUS = new Set<HeartbeatStatus>(['online', 'offline', 'degraded', 'maintenance']);
-const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 function structuredLog(level: 'info' | 'warn' | 'error', event: string, fields: Record<string, unknown> = {}) {
   console.log(JSON.stringify({ level, event, service: 'ifarm-security-api', timestamp: new Date().toISOString(), ...fields }));
@@ -26,28 +26,13 @@ app.use('*', async (c, next) => {
   const startedAt = Date.now();
   c.set('requestId', requestId);
   c.header('x-request-id', requestId);
-  try {
-    await next();
-  } finally {
-    structuredLog('info', 'http_request', {
-      requestId,
-      environment: c.env.APP_ENV,
-      method: c.req.method,
-      path: new URL(c.req.url).pathname,
-      status: c.res.status,
-      durationMs: Date.now() - startedAt
-    });
+  try { await next(); } finally {
+    structuredLog('info', 'http_request', { requestId, environment: c.env.APP_ENV, method: c.req.method, path: new URL(c.req.url).pathname, status: c.res.status, durationMs: Date.now() - startedAt });
   }
 });
 
 app.onError((error, c) => {
-  structuredLog('error', 'unhandled_error', {
-    requestId: c.get('requestId'),
-    environment: c.env.APP_ENV,
-    method: c.req.method,
-    path: new URL(c.req.url).pathname,
-    errorName: error.name
-  });
+  structuredLog('error', 'unhandled_error', { requestId: c.get('requestId'), environment: c.env.APP_ENV, method: c.req.method, path: new URL(c.req.url).pathname, errorName: error.name });
   return c.json({ error: 'internal_error', requestId: c.get('requestId') }, 500);
 });
 
@@ -55,48 +40,17 @@ async function sha256Hex(value: string) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
+function deviceKeyFromAuthorization(value?: string) { if (!value?.startsWith('Device ')) return ''; return value.slice('Device '.length).trim(); }
+function validMetadata(value: unknown) { if (!value || Array.isArray(value) || typeof value !== 'object') return {}; return value as Record<string, unknown>; }
 
-function deviceKeyFromAuthorization(value?: string) {
-  if (!value?.startsWith('Device ')) return '';
-  return value.slice('Device '.length).trim();
-}
-
-function validMetadata(value: unknown) {
-  if (!value || Array.isArray(value) || typeof value !== 'object') return {};
-  return value as Record<string, unknown>;
-}
-
-app.get('/health', (c) => c.json({
-  ok: true,
-  type: 'liveness',
-  service: 'ifarm-security-api',
-  environment: c.env.APP_ENV,
-  timestamp: new Date().toISOString()
-}));
-
+app.get('/health', (c) => c.json({ ok: true, type: 'liveness', service: 'ifarm-security-api', environment: c.env.APP_ENV, timestamp: new Date().toISOString() }));
 app.get('/ready', async (c) => {
   const startedAt = Date.now();
   if (!c.env.DATABASE_URL) return c.json({ ready: false, databaseConfigured: false, reason: 'database_not_configured', timestamp: new Date().toISOString() }, 503);
-  try {
-    const sql = neon(c.env.DATABASE_URL);
-    await sql`select 1 as ready`;
-    return c.json({ ready: true, databaseConfigured: true, databaseLatencyMs: Date.now() - startedAt, timestamp: new Date().toISOString() });
-  } catch {
-    structuredLog('error', 'readiness_database_failed', { requestId: c.get('requestId'), environment: c.env.APP_ENV });
-    return c.json({ ready: false, databaseConfigured: true, reason: 'database_unavailable', timestamp: new Date().toISOString() }, 503);
-  }
+  try { const sql = neon(c.env.DATABASE_URL); await sql`select 1 as ready`; return c.json({ ready: true, databaseConfigured: true, databaseLatencyMs: Date.now() - startedAt, timestamp: new Date().toISOString() }); }
+  catch { structuredLog('error', 'readiness_database_failed', { requestId: c.get('requestId'), environment: c.env.APP_ENV }); return c.json({ ready: false, databaseConfigured: true, reason: 'database_unavailable', timestamp: new Date().toISOString() }, 503); }
 });
-
-app.get('/api/v1/system/status', (c) => c.json({
-  product: c.env.APP_NAME,
-  modules: ['identity', 'map', 'devices', 'telemetry', 'events', 'incidents', 'evidence', 'sos', 'asset-security', 'insurance', 'community', 'operations'],
-  databaseConfigured: Boolean(c.env.DATABASE_URL),
-  storageConfigured: false,
-  humanMonitoringAssumed: false,
-  publicDispatchEnabled: false,
-  governmentIntegration: false,
-  biometricMatching: false
-}));
+app.get('/api/v1/system/status', (c) => c.json({ product: c.env.APP_NAME, modules: ['identity', 'map', 'devices', 'telemetry', 'events', 'incidents', 'evidence', 'sos', 'asset-security', 'insurance', 'community', 'operations'], databaseConfigured: Boolean(c.env.DATABASE_URL), storageConfigured: false, humanMonitoringAssumed: false, publicDispatchEnabled: false, governmentIntegration: false, biometricMatching: false }));
 
 app.post('/api/v1/ingest/devices/:deviceId/heartbeat', async (c) => {
   if (!c.env.DATABASE_URL) return c.json({ error: 'service_not_configured' }, 503);
@@ -106,8 +60,7 @@ app.post('/api/v1/ingest/devices/:deviceId/heartbeat', async (c) => {
   if (Number.isFinite(contentLength) && contentLength > 32768) return c.json({ error: 'payload_too_large' }, 413);
   const rawKey = deviceKeyFromAuthorization(c.req.header('authorization'));
   if (rawKey.length < 32 || rawKey.length > 200) return c.json({ error: 'unauthorized' }, 401);
-  let body: HeartbeatBody;
-  try { body = await c.req.json<HeartbeatBody>(); } catch { return c.json({ error: 'invalid_json' }, 400); }
+  let body: HeartbeatBody; try { body = await c.req.json<HeartbeatBody>(); } catch { return c.json({ error: 'invalid_json' }, 400); }
   const status = body.status;
   if (!status || !VALID_STATUS.has(status)) return c.json({ error: 'invalid_status' }, 400);
   if (body.eventId !== undefined && (!body.eventId || body.eventId.length > 128)) return c.json({ error: 'invalid_event_id' }, 400);
@@ -115,16 +68,11 @@ app.post('/api/v1/ingest/devices/:deviceId/heartbeat', async (c) => {
   if (body.signalRssi !== undefined && (!Number.isInteger(body.signalRssi) || body.signalRssi < -200 || body.signalRssi > 0)) return c.json({ error: 'invalid_signal' }, 400);
   if (body.connectionType !== undefined && body.connectionType.length > 32) return c.json({ error: 'invalid_connection_type' }, 400);
   let sourceAt: string | null = null;
-  if (body.sourceAt) {
-    const parsed = new Date(body.sourceAt);
-    if (Number.isNaN(parsed.valueOf()) || parsed.valueOf() > Date.now() + 10 * 60 * 1000) return c.json({ error: 'invalid_source_at' }, 400);
-    sourceAt = parsed.toISOString();
-  }
+  if (body.sourceAt) { const parsed = new Date(body.sourceAt); if (Number.isNaN(parsed.valueOf()) || parsed.valueOf() > Date.now() + 10 * 60 * 1000) return c.json({ error: 'invalid_source_at' }, 400); sourceAt = parsed.toISOString(); }
   const metadataJson = JSON.stringify(validMetadata(body.metadata));
   if (new TextEncoder().encode(metadataJson).byteLength > 8192) return c.json({ error: 'metadata_too_large' }, 413);
   try {
-    const keyHash = await sha256Hex(rawKey);
-    const sql = neon(c.env.DATABASE_URL);
+    const keyHash = await sha256Hex(rawKey); const sql = neon(c.env.DATABASE_URL);
     const rows = await sql`select * from public.ingest_device_heartbeat(${deviceId}::uuid,${keyHash}::text,${body.eventId ?? null}::text,${status}::device_status,${sourceAt}::timestamptz,${body.batteryPct ?? null}::numeric,${body.signalRssi ?? null}::integer,${body.connectionType ?? null}::text,${metadataJson}::jsonb)`;
     const row = rows[0] as { accepted: boolean; current_status: string; received_at: string; transition: string } | undefined;
     if (!row) return c.json({ error: 'ingest_failed' }, 500);
@@ -133,8 +81,7 @@ app.post('/api/v1/ingest/devices/:deviceId/heartbeat', async (c) => {
     const message = error instanceof Error ? error.message : '';
     if (message.includes('invalid_device_key')) return c.json({ error: 'unauthorized' }, 401);
     if (message.includes('source_time_in_future') || message.includes('invalid_')) return c.json({ error: 'invalid_heartbeat' }, 400);
-    structuredLog('error', 'heartbeat_ingest_failed', { requestId: c.get('requestId'), environment: c.env.APP_ENV });
-    return c.json({ error: 'internal_error' }, 500);
+    structuredLog('error', 'heartbeat_ingest_failed', { requestId: c.get('requestId'), environment: c.env.APP_ENV }); return c.json({ error: 'internal_error' }, 500);
   }
 });
 
@@ -146,8 +93,7 @@ app.post('/api/v1/ingest/assets/:assetId/position', async (c) => {
   if (Number.isFinite(contentLength) && contentLength > 32768) return c.json({ error: 'payload_too_large' }, 413);
   const rawKey = deviceKeyFromAuthorization(c.req.header('authorization'));
   if (rawKey.length < 32 || rawKey.length > 200) return c.json({ error: 'unauthorized' }, 401);
-  let body: AssetPositionBody;
-  try { body = await c.req.json<AssetPositionBody>(); } catch { return c.json({ error: 'invalid_json' }, 400); }
+  let body: AssetPositionBody; try { body = await c.req.json<AssetPositionBody>(); } catch { return c.json({ error: 'invalid_json' }, 400); }
   if (!UUID_PATTERN.test(body.deviceId || '')) return c.json({ error: 'invalid_device_id' }, 400);
   if (!Number.isFinite(body.latitude) || body.latitude < -90 || body.latitude > 90 || !Number.isFinite(body.longitude) || body.longitude < -180 || body.longitude > 180) return c.json({ error: 'invalid_coordinates' }, 400);
   if (body.eventId !== undefined && (!body.eventId || body.eventId.length > 128)) return c.json({ error: 'invalid_event_id' }, 400);
@@ -159,8 +105,7 @@ app.post('/api/v1/ingest/assets/:assetId/position', async (c) => {
   const metadataJson = JSON.stringify(validMetadata(body.metadata));
   if (new TextEncoder().encode(metadataJson).byteLength > 8192) return c.json({ error: 'metadata_too_large' }, 413);
   try {
-    const keyHash = await sha256Hex(rawKey);
-    const sql = neon(c.env.DATABASE_URL);
+    const keyHash = await sha256Hex(rawKey); const sql = neon(c.env.DATABASE_URL);
     const rows = await sql`select * from public.ingest_asset_position(${assetId}::uuid,${body.deviceId}::uuid,${keyHash}::text,${body.eventId ?? null}::text,${parsed.toISOString()}::timestamptz,${body.latitude}::double precision,${body.longitude}::double precision,${body.speedKmh ?? null}::numeric,${body.headingDegrees ?? null}::numeric,${body.accuracyM ?? null}::numeric,${metadataJson}::jsonb)`;
     const row = rows[0] as { accepted: boolean; inside_geofence: boolean | null; transition: string; received_at: string } | undefined;
     if (!row) return c.json({ error: 'ingest_failed' }, 500);
@@ -171,29 +116,15 @@ app.post('/api/v1/ingest/assets/:assetId/position', async (c) => {
     if (message.includes('asset_device_mismatch')) return c.json({ error: 'device_not_linked_to_asset' }, 403);
     if (message.includes('asset_not_found')) return c.json({ error: 'asset_not_found' }, 404);
     if (message.includes('invalid_')) return c.json({ error: 'invalid_position' }, 400);
-    structuredLog('error', 'asset_position_ingest_failed', { requestId: c.get('requestId'), environment: c.env.APP_ENV });
-    return c.json({ error: 'internal_error' }, 500);
+    structuredLog('error', 'asset_position_ingest_failed', { requestId: c.get('requestId'), environment: c.env.APP_ENV }); return c.json({ error: 'internal_error' }, 500);
   }
 });
 
 async function reconcileStaleDevices(env: Bindings) {
-  if (!env.DATABASE_URL) {
-    structuredLog('warn', 'scheduled_reconcile_skipped', { environment: env.APP_ENV, reason: 'database_not_configured' });
-    return;
-  }
-  try {
-    const sql = neon(env.DATABASE_URL);
-    await sql`select public.reconcile_stale_devices()`;
-    structuredLog('info', 'scheduled_reconcile_complete', { environment: env.APP_ENV });
-  } catch {
-    structuredLog('error', 'scheduled_reconcile_failed', { environment: env.APP_ENV });
-    throw new Error('scheduled_reconcile_failed');
-  }
+  if (!env.DATABASE_URL) { structuredLog('warn', 'scheduled_reconcile_skipped', { environment: env.APP_ENV, reason: 'database_not_configured' }); return; }
+  try { const sql = neon(env.DATABASE_URL); await sql`select public.reconcile_stale_devices()`; structuredLog('info', 'scheduled_reconcile_complete', { environment: env.APP_ENV }); }
+  catch { structuredLog('error', 'scheduled_reconcile_failed', { environment: env.APP_ENV }); throw new Error('scheduled_reconcile_failed'); }
 }
 
-const handler: ExportedHandler<Bindings> = {
-  fetch(request, env, ctx) { return app.fetch(request, env, ctx); },
-  scheduled(_controller, env, ctx) { ctx.waitUntil(reconcileStaleDevices(env)); }
-};
-
+const handler: ExportedHandler<Bindings> = { fetch(request, env, ctx) { return app.fetch(request, env, ctx); }, scheduled(_controller, env, ctx) { ctx.waitUntil(reconcileStaleDevices(env)); } };
 export default handler;
