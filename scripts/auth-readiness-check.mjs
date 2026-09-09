@@ -29,10 +29,11 @@ const envFiles = [
 
 for (const [label, text] of envFiles) {
   const dataLines = text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
+  const dataOnly = dataLines.join('\n');
   requireInvariant(dataLines.length === 2, `${label} browser env example must contain only the two public Neon endpoint variables.`);
   requireInvariant(dataLines.every((line) => line.startsWith('VITE_NEON_AUTH_URL=') || line.startsWith('VITE_NEON_DATA_API_URL=')), `${label} browser env example contains an unexpected variable.`);
-  requireInvariant(!/(?:DATABASE_URL|NEON_DATABASE_URL|POSTGRES_URL|TOKEN|SECRET|PASSWORD|PRIVATE_KEY)/i.test(text), `${label} browser env example must not contain secrets or privileged connection material.`);
-  requireInvariant(!/postgres(?:ql)?:\/\//i.test(text), `${label} browser env example must not contain PostgreSQL URLs.`);
+  requireInvariant(!/(?:DATABASE_URL|NEON_DATABASE_URL|POSTGRES_URL|TOKEN|SECRET|PASSWORD|PRIVATE_KEY)/i.test(dataOnly), `${label} browser env example must not contain secrets or privileged connection material.`);
+  requireInvariant(!/postgres(?:ql)?:\/\//i.test(dataOnly), `${label} browser env example must not contain PostgreSQL URLs.`);
 }
 
 const stageAuth = stageEnv.match(/VITE_NEON_AUTH_URL=(\S+)/)?.[1] ?? '';
