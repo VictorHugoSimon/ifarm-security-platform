@@ -1,8 +1,8 @@
-# SEC-170 — Cloudflare Pages STAGE contract
+# SEC-170/171 — Cloudflare Pages STAGE contract
 
-Data de referência: 2026-09-09.
+Data de referência: 2026-09-10.
 
-## Recurso planejado
+## Recurso reservado
 - Project: `ifarm-security-web-stage`
 - Provider: Cloudflare Pages, recurso exclusivo do iFarm Security
 - GitHub repository: `VictorHugoSimon/ifarm-security-platform`
@@ -12,37 +12,40 @@ Data de referência: 2026-09-09.
 - Build output directory: `apps/web/dist`
 - Framework: React + Vite
 
-O nome `ifarm-security-web-stage` é reservado para STAGE. O recurso final não deve reutilizar Pages, Worker, domínio, token ou binding de nenhum outro projeto.
+O nome `ifarm-security-web-stage` é reservado para STAGE. Não reutilizar Pages, Worker, domínio, token, account secret, binding ou infraestrutura de qualquer outro projeto.
+
+## Bootstrap automatizado
+A SEC-171 autoriza o workflow `.github/workflows/deploy-stage.yml` a criar o Pages `ifarm-security-web-stage` caso ele ainda não exista e publicar o build estático do STAGE.
+
+O bootstrap só pode prosseguir quando existirem os dois secrets dedicados abaixo no repositório/ambiente deste projeto:
+- `IFARM_SECURITY_CLOUDFLARE_API_TOKEN`
+- `IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID`
+
+É proibido substituir esses nomes por secrets genéricos ou reaproveitar credenciais de Instituto Államo, iFarm Core, Terra Pulse, Ser Vital, Maison Decants, Semeali ou qualquer outro projeto.
+
+O workflow fixa Wrangler `4.130.0`, executa todos os gates locais, testa, faz typecheck, compila o web, valida `dist`, cria o projeto se necessário, publica na branch Pages `stage` e executa smoke público na URL retornada pelo Cloudflare.
 
 ## Variáveis de build permitidas no browser
-Somente as duas variáveis públicas abaixo devem ser cadastradas para o build STAGE:
+Somente estas duas variáveis públicas entram no build STAGE:
 - `VITE_NEON_AUTH_URL` — endpoint Neon Auth exclusivo do STAGE;
 - `VITE_NEON_DATA_API_URL` — endpoint Neon Data API exclusivo do STAGE.
 
-Elas são endpoints públicos do browser e não são credenciais. Não cadastrar no frontend `DATABASE_URL`, senha PostgreSQL, token Neon, API token Cloudflare, device key, storage secret ou qualquer segredo equivalente.
+Elas não são credenciais. Não cadastrar no frontend `DATABASE_URL`, senha PostgreSQL, Neon API key, Cloudflare API token, device key, storage secret ou equivalente.
 
 ## SPA
-`apps/web/public/_redirects` contém `/* /index.html 200`. O Vite copia arquivos de `public/` para o output e Cloudflare Pages interpreta `_redirects` no diretório estático. Isso permite abrir URLs internas do SPA sem 404 no refresh.
+`apps/web/public/_redirects` contém `/* /index.html 200`. O Vite copia o arquivo para `apps/web/dist/_redirects`, permitindo fallback SPA no Pages.
 
-## Bloqueador atual
-**NÃO criar deploy enquanto** não houver uma decisão explícita sobre a origem oficial do STAGE e os seguintes controles não puderem ser aplicados juntos:
-1. origem HTTPS oficial do frontend STAGE;
-2. origem cadastrada em Neon Auth trusted origins/redirects;
-3. Data API CORS atualizado para a origem aprovada;
-4. política do Auth provider com signup público fechado e verificação de e-mail obrigatória por caminho oficial suportado;
-5. estratégia de MFA validada;
-6. identidade QA controlada para smoke autenticado.
+## Gate de uso real
+**NÃO habilitar uso real enquanto** todos os itens abaixo não estiverem concluídos:
+1. URL HTTPS do Pages criada e registrada como origem STAGE oficial;
+2. origem cadastrada no Neon Auth trusted origins/redirects;
+3. Data API CORS limitado à origem STAGE aprovada;
+4. signup público do provider fechado por caminho oficial suportado;
+5. verificação de e-mail obrigatória;
+6. MFA validada para os perfis exigidos;
+7. identidade QA controlada e smoke autenticado aprovado.
 
-Enquanto esses itens estiverem pendentes, a SEC-170 entrega somente prontidão de código e contrato, não um ambiente público utilizável.
+A existência do Pages e o smoke público não significam aprovação para cliente, piloto ou usuário real. Até o fechamento desses controles, somente dados e identidades sintéticas são permitidos.
 
-## Smoke sem credenciais
-Depois que a URL STAGE existir, executar:
-`IFARM_SECURITY_STAGE_URL=https://<host-aprovado> pnpm stage:smoke`
-
-O smoke público valida:
-- HTTPS e origem não-localhost;
-- resposta HTML da raiz;
-- presença da marca iFarm Security;
-- fallback SPA em rota inexistente.
-
-Smoke autenticado será uma etapa separada e nunca deve usar credenciais de outro projeto.
+## Depois do primeiro deploy
+A URL retornada pelo Cloudflare deve ser usada imediatamente para configurar trusted origin e CORS no Neon STAGE. PROD continua fora do escopo. Depois disso, executar a validação autenticada e registrar o aceite de promoção em etapa separada.

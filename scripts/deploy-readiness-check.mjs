@@ -15,6 +15,7 @@ const viteConfig = read('apps/web/vite.config.ts');
 const redirects = read('apps/web/public/_redirects').trim();
 const stageEnv = read('apps/web/.env.stage.example');
 const cloudflareContract = read('infra/cloudflare/pages-stage.md');
+const stageWorkflow = read('.github/workflows/deploy-stage.yml');
 
 requireInvariant(rootPackage.scripts?.['deploy:check'] === 'node scripts/deploy-readiness-check.mjs', 'root deploy:check script must remain registered.');
 requireInvariant(webPackage.scripts?.build === 'tsc -b && vite build', 'web build contract changed unexpectedly.');
@@ -35,6 +36,24 @@ for (const expected of [
   requireInvariant(cloudflareContract.includes(expected), `Cloudflare STAGE contract missing: ${expected}`);
 }
 
-requireInvariant(cloudflareContract.includes('NÃO criar deploy enquanto'), 'Cloudflare contract must keep the explicit deployment blocker.');
+requireInvariant(cloudflareContract.includes('NÃO habilitar uso real enquanto'), 'Cloudflare contract must keep the explicit real-use blocker.');
 
-console.log('Deploy readiness check passed: Vite build, Cloudflare Pages contract, SPA fallback and public-only STAGE env preserved.');
+for (const expected of [
+  'IFARM_SECURITY_CF_PROJECT: ifarm-security-web-stage',
+  'secrets.IFARM_SECURITY_CLOUDFLARE_API_TOKEN',
+  'secrets.IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID',
+  'wrangler@4.130.0 pages project create',
+  'wranglerVersion: "4.130.0"',
+  '--project-name=${{ env.IFARM_SECURITY_CF_PROJECT }} --branch=stage',
+  'pnpm stage:smoke',
+  "github.repository == 'VictorHugoSimon/ifarm-security-platform'",
+  "github.ref == 'refs/heads/main'"
+]) {
+  requireInvariant(stageWorkflow.includes(expected), `STAGE deploy workflow missing invariant: ${expected}`);
+}
+
+requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_API_TOKEN'), 'generic CLOUDFLARE_API_TOKEN secret name is forbidden; use the iFarm Security dedicated secret.');
+requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_ACCOUNT_ID'), 'generic CLOUDFLARE_ACCOUNT_ID secret name is forbidden; use the iFarm Security dedicated secret.');
+requireInvariant(!/(?:DATABASE_URL|POSTGRES_URL|NEON_API_KEY|NEON_DATABASE_URL)/.test(stageWorkflow), 'STAGE deploy workflow must not receive privileged database credentials.');
+
+console.log('Deploy readiness check passed: Pages contract, isolated Cloudflare credentials, pinned Wrangler, SPA fallback and smoke gate preserved.');
