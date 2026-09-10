@@ -1,0 +1,117 @@
+name: Deploy iFarm Security STAGE
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ifarm-security-stage-deploy
+  cancel-in-progress: false
+
+env:
+  IFARM_SECURITY_CF_PROJECT: ifarm-security-web-stage
+  VITE_NEON_AUTH_URL: https://ep-small-darkness-ac0fr7oc.neonauth.sa-east-1.aws.neon.tech/ifarm_security/auth
+  VITE_NEON_DATA_API_URL: https://ep-small-darkness-ac0fr7oc.apirest.sa-east-1.aws.neon.tech/ifarm_security/rest/v1
+
+jobs:
+  deploy-stage:
+    if: github.repository == 'VictorHugoSimon/ifarm-security-platform' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ifarm-security-stage
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Require isolated Cloudflare credentials
+        env:
+          CF_API_TOKEN: ${{ secrets.IFARM_SECURITY_CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          if [ -z "$CF_API_TOKEN" ]; then
+            echo "::error::Missing dedicated secret IFARM_SECURITY_CLOUDFLARE_API_TOKEN. No Cloudflare call was made."
+            exit 1
+          fi
+          if [ -z "$CF_ACCOUNT_ID" ]; then
+            echo "::error::Missing dedicated secret IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID. No Cloudflare call was made."
+            exit 1
+          fi
+
+      - name: Security gates
+        run: |
+          pnpm security:check
+          pnpm migrations:check
+          pnpm rbac:check
+          pnpm auth:check
+          pnpm deploy:check
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Test and typecheck
+        run: |
+          pnpm test
+          pnpm typecheck
+
+      - name: Build STAGE web
+        run: pnpm --filter @ifarm-security/web build
+
+      - name: Validate Pages artifact
+        shell: bash
+        run: |
+          test -f apps/web/dist/index.html
+          test -f apps/web/dist/_redirects
+          grep -Fxq '/* /index.html 200' apps/web/dist/_redirects
+
+      - name: Bootstrap isolated Pages project if absent
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IFARM_SECURITY_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          npx --yes wrangler@4.130.0 pages project list --json > "$RUNNER_TEMP/ifarm-security-pages.json"
+          if grep -Eq '"name"[[:space:]]*:[[:space:]]*"ifarm-security-web-stage"' "$RUNNER_TEMP/ifarm-security-pages.json"; then
+            echo "Dedicated Pages project already exists."
+          else
+            npx --yes wrangler@4.130.0 pages project create "$IFARM_SECURITY_CF_PROJECT" --production-branch=stage
+          fi
+
+      - name: Deploy STAGE
+        id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.IFARM_SECURITY_CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.130.0"
+          command: pages deploy apps/web/dist --project-name=${{ env.IFARM_SECURITY_CF_PROJECT }} --branch=stage --commit-hash=${{ github.sha }}
+
+      - name: Public smoke
+        env:
+          DEPLOYMENT_ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
+        shell: bash
+        run: |
+          STAGE_URL="${DEPLOYMENT_ALIAS_URL:-$DEPLOYMENT_URL}"
+          if [ -z "$STAGE_URL" ]; then
+            echo "::error::Cloudflare deploy completed without a deployment URL output."
+            exit 1
+          fi
+          IFARM_SECURITY_STAGE_URL="$STAGE_URL" pnpm stage:smoke
+          echo "### iFarm Security STAGE" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Project: $IFARM_SECURITY_CF_PROJECT" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: $STAGE_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Public smoke: passed" >> "$GITHUB_STEP_SUMMARY"
