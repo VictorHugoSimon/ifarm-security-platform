@@ -37,6 +37,8 @@ jobs:
         run: pnpm rbac:check
       - name: Privilege hardening invariants
         run: pnpm privileges:check
+      - name: Invitation delegation invariants
+        run: pnpm invitations:check
       - name: HTTP security invariants
         run: pnpm http-security:check
       - name: Auth readiness invariants
