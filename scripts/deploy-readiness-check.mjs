@@ -45,15 +45,23 @@ for (const expected of [
   'wrangler@4.130.0 pages project create',
   'wranglerVersion: "4.130.0"',
   '--project-name=${{ env.IFARM_SECURITY_CF_PROJECT }} --branch=stage',
+  'pnpm privileges:check',
   'pnpm stage:smoke',
   "github.repository == 'VictorHugoSimon/ifarm-security-platform'",
-  "github.ref == 'refs/heads/main'"
+  "github.ref == 'refs/heads/main'",
+  '${{ github.event.repository.visibility }}',
+  'iFarm Security repository must be private before any Cloudflare deployment'
 ]) {
   requireInvariant(stageWorkflow.includes(expected), `STAGE deploy workflow missing invariant: ${expected}`);
 }
+
+const privateGatePosition = stageWorkflow.indexOf('- name: Require private repository');
+const credentialGatePosition = stageWorkflow.indexOf('- name: Require isolated Cloudflare credentials');
+const cloudflareCallPosition = stageWorkflow.indexOf('wrangler@4.130.0 pages project list');
+requireInvariant(privateGatePosition >= 0 && privateGatePosition < credentialGatePosition && credentialGatePosition < cloudflareCallPosition, 'repository privacy and dedicated credential gates must execute before every Cloudflare call.');
 
 requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_API_TOKEN'), 'generic CLOUDFLARE_API_TOKEN secret name is forbidden; use the iFarm Security dedicated secret.');
 requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_ACCOUNT_ID'), 'generic CLOUDFLARE_ACCOUNT_ID secret name is forbidden; use the iFarm Security dedicated secret.');
 requireInvariant(!/(?:DATABASE_URL|POSTGRES_URL|NEON_API_KEY|NEON_DATABASE_URL)/.test(stageWorkflow), 'STAGE deploy workflow must not receive privileged database credentials.');
 
-console.log('Deploy readiness check passed: Pages contract, isolated Cloudflare credentials, pinned Wrangler, SPA fallback and smoke gate preserved.');
+console.log('Deploy readiness check passed: private-repo gate, isolated Cloudflare credentials, pinned Wrangler, Pages contract and smoke gate preserved.');
