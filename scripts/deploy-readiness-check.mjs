@@ -13,14 +13,22 @@ const rootPackage = JSON.parse(read('package.json'));
 const webPackage = JSON.parse(read('apps/web/package.json'));
 const viteConfig = read('apps/web/vite.config.ts');
 const redirects = read('apps/web/public/_redirects').trim();
+const headers = read('apps/web/public/_headers');
+const robots = read('apps/web/public/robots.txt').trim();
 const stageEnv = read('apps/web/.env.stage.example');
 const cloudflareContract = read('infra/cloudflare/pages-stage.md');
 const stageWorkflow = read('.github/workflows/deploy-stage.yml');
 
 requireInvariant(rootPackage.scripts?.['deploy:check'] === 'node scripts/deploy-readiness-check.mjs', 'root deploy:check script must remain registered.');
+requireInvariant(rootPackage.scripts?.['http-security:check'] === 'node scripts/http-security-check.mjs', 'HTTP security invariant script must remain registered.');
 requireInvariant(webPackage.scripts?.build === 'tsc -b && vite build', 'web build contract changed unexpectedly.');
 requireInvariant(viteConfig.includes('defineConfig') && viteConfig.includes('react()'), 'web must remain a Vite React application.');
 requireInvariant(redirects === '/* /index.html 200', 'Cloudflare Pages SPA fallback must rewrite unknown paths to index.html with status 200.');
+requireInvariant(headers.includes('Content-Security-Policy:'), 'Cloudflare Pages _headers must include CSP.');
+requireInvariant(headers.includes("frame-ancestors 'none'"), 'CSP must block framing.');
+requireInvariant(headers.includes('X-Frame-Options: DENY'), 'legacy anti-framing header must remain enabled.');
+requireInvariant(headers.includes('X-Robots-Tag: noindex, nofollow, noarchive'), 'private portal must remain noindex.');
+requireInvariant(robots === 'User-agent: *\nDisallow: /', 'private portal robots.txt must block crawlers.');
 
 const stageDataLines = stageEnv.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
 requireInvariant(stageDataLines.length === 2, 'STAGE browser environment must still contain only public Auth/Data API URLs.');
@@ -46,6 +54,10 @@ for (const expected of [
   'wranglerVersion: "4.130.0"',
   '--project-name=${{ env.IFARM_SECURITY_CF_PROJECT }} --branch=stage',
   'pnpm privileges:check',
+  'pnpm http-security:check',
+  'test -f apps/web/dist/_headers',
+  'test -f apps/web/dist/robots.txt',
+  'cmp apps/web/public/_headers apps/web/dist/_headers',
   'pnpm stage:smoke',
   "github.repository == 'VictorHugoSimon/ifarm-security-platform'",
   "github.ref == 'refs/heads/main'",
@@ -64,4 +76,4 @@ requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_API_TOKEN'), 'gener
 requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_ACCOUNT_ID'), 'generic CLOUDFLARE_ACCOUNT_ID secret name is forbidden; use the iFarm Security dedicated secret.');
 requireInvariant(!/(?:DATABASE_URL|POSTGRES_URL|NEON_API_KEY|NEON_DATABASE_URL)/.test(stageWorkflow), 'STAGE deploy workflow must not receive privileged database credentials.');
 
-console.log('Deploy readiness check passed: private-repo gate, isolated Cloudflare credentials, pinned Wrangler, Pages contract and smoke gate preserved.');
+console.log('Deploy readiness check passed: private-repo gate, isolated Cloudflare credentials, HTTP security artifact, pinned Wrangler, Pages contract and smoke gate preserved.');

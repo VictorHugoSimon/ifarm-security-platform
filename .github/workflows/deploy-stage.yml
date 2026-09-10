@@ -65,6 +65,7 @@ jobs:
           pnpm migrations:check
           pnpm rbac:check
           pnpm privileges:check
+          pnpm http-security:check
           pnpm auth:check
           pnpm deploy:check
 
@@ -84,7 +85,11 @@ jobs:
         run: |
           test -f apps/web/dist/index.html
           test -f apps/web/dist/_redirects
+          test -f apps/web/dist/_headers
+          test -f apps/web/dist/robots.txt
           grep -Fxq '/* /index.html 200' apps/web/dist/_redirects
+          cmp apps/web/public/_headers apps/web/dist/_headers
+          cmp apps/web/public/robots.txt apps/web/dist/robots.txt
 
       - name: Bootstrap isolated Pages project if absent
         env:
@@ -123,4 +128,4 @@ jobs:
           echo "### iFarm Security STAGE" >> "$GITHUB_STEP_SUMMARY"
           echo "- Project: $IFARM_SECURITY_CF_PROJECT" >> "$GITHUB_STEP_SUMMARY"
           echo "- URL: $STAGE_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Public smoke: passed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Public smoke + security headers: passed" >> "$GITHUB_STEP_SUMMARY"
