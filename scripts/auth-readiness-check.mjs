@@ -18,6 +18,13 @@ requireInvariant(authGate.includes('neon.auth.signIn.email'), 'frontend must kee
 requireInvariant(!/\bsignUp\b|\.signUp\b/.test(authGate), 'public sign-up must not be exposed by the frontend.');
 requireInvariant(authGate.includes('O portal não oferece cadastro público.'), 'restricted-access notice must remain visible on the login screen.');
 
+const verifiedGatePosition = authGate.indexOf('user?.emailVerified !== true');
+const childrenPosition = authGate.lastIndexOf('return <>{children}</>');
+requireInvariant(verifiedGatePosition >= 0, 'authenticated sessions must be explicitly blocked when emailVerified is not true.');
+requireInvariant(childrenPosition > verifiedGatePosition, 'verified-email gate must execute before rendering the protected app shell.');
+requireInvariant(authGate.includes('Nenhum módulo, tenant ou dado operacional foi carregado.'), 'unverified-session screen must state that protected data was not loaded.');
+requireInvariant(authGate.includes('neon.auth.signOut()'), 'blocked sessions must retain a safe sign-out path.');
+
 requireInvariant(neonClient.includes('VITE_NEON_AUTH_URL') && neonClient.includes('VITE_NEON_DATA_API_URL'), 'browser client must use public Auth/Data API endpoint variables.');
 requireInvariant(!/(?:DATABASE_URL|NEON_DATABASE_URL|POSTGRES_URL|PGPASSWORD|PRIVATE_KEY|CLIENT_SECRET)/.test(neonClient), 'privileged database or secret variables must not enter the browser client.');
 requireInvariant(!/postgres(?:ql)?:\/\//i.test(neonClient), 'browser client must never contain a PostgreSQL connection string.');
@@ -44,4 +51,4 @@ requireInvariant(/^https:\/\/[^/]+\.neonauth\.[^/]+\/ifarm_security\/auth$/.test
 requireInvariant(/^https:\/\/[^/]+\.apirest\.[^/]+\/ifarm_security\/rest\/v1$/.test(stageData), 'STAGE Data API URL must be a public Neon Data API endpoint for ifarm_security.');
 requireInvariant(stageAuth !== devAuth, 'DEV and STAGE Auth endpoints must remain isolated.');
 
-console.log('Auth readiness check passed: no public signup UI, no privileged browser credentials, DEV/STAGE endpoints isolated.');
+console.log('Auth readiness check passed: no signup UI, unverified sessions blocked before shell, no privileged browser credentials, DEV/STAGE endpoints isolated.');
