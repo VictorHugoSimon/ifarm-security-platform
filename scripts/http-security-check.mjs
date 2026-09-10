@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const read = (path) => readFileSync(path, 'utf8');
 const fail = (message) => {
@@ -13,6 +13,13 @@ const headers = read('apps/web/public/_headers');
 const robots = read('apps/web/public/robots.txt');
 const index = read('apps/web/index.html');
 const stageEnv = read('apps/web/.env.stage.example');
+
+for (const serverSidePath of ['functions', 'apps/web/functions', 'apps/web/_worker.js', 'apps/web/public/_worker.js']) {
+  requireInvariant(
+    !existsSync(serverSidePath),
+    `${serverSidePath} introduces a Pages server-side response path; implement equivalent headers there and update SEC-173 before enabling it.`
+  );
+}
 
 const env = Object.fromEntries(
   stageEnv
@@ -86,4 +93,4 @@ requireInvariant(headers.includes('/assets/*\n  Cache-Control: public, max-age=3
 requireInvariant(robots.trim() === 'User-agent: *\nDisallow: /', 'robots.txt must block indexing of the private portal.');
 requireInvariant(index.includes('name="robots" content="noindex,nofollow,noarchive"'), 'index.html must include a noindex fallback meta tag.');
 
-console.log('HTTP security check passed: strict CSP, anti-framing, privacy headers, noindex and cache policy preserved.');
+console.log('HTTP security check passed: strict CSP, static-only Pages path, anti-framing, privacy headers, noindex and cache policy preserved.');
