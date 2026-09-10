@@ -27,7 +27,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ github.event.repository.visibility }}" != "private" ]; then
-            echo "::warning::Repository is public by development decision. Deploy/secrets must remain blocked."
+            echo "::warning::Repository is public by development decision. Cloudflare deploy remains blocked until it becomes private."
           fi
       - name: Security check
         run: pnpm security:check
@@ -35,6 +35,8 @@ jobs:
         run: pnpm migrations:check
       - name: RBAC invariants
         run: pnpm rbac:check
+      - name: Privilege hardening invariants
+        run: pnpm privileges:check
       - name: Auth readiness invariants
         run: pnpm auth:check
       - name: Deploy readiness invariants
