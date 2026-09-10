@@ -2,6 +2,7 @@ import { FormEvent, ReactNode, useState } from 'react';
 import { neon } from './lib/neon';
 
 type Props = { children: ReactNode };
+type SessionUser = { email?: string | null; emailVerified?: boolean | null };
 
 export function AuthGate({ children }: Props) {
   const session = neon.auth.useSession();
@@ -41,6 +42,21 @@ export function AuthGate({ children }: Props) {
           <button className="primary" disabled={submitting}>{submitting ? 'Entrando…' : 'Entrar'}</button>
           <small>O acesso aos dados depende de convite, e-mail verificado e permissão no tenant.</small>
         </form>
+      </div>
+    );
+  }
+
+  const user = session.data.user as SessionUser | undefined;
+  if (user?.emailVerified !== true) {
+    return (
+      <div className="auth-screen">
+        <div className="auth-card">
+          <span className="eyebrow">ACESSO BLOQUEADO</span>
+          <h1>Verificação obrigatória</h1>
+          <p>Esta conta ainda não atende ao requisito de e-mail verificado do iFarm Security. Nenhum módulo, tenant ou dado operacional foi carregado.</p>
+          {user?.email && <small>Conta autenticada: {user.email}</small>}
+          <button className="secondary" type="button" onClick={() => void neon.auth.signOut()}>Sair</button>
+        </div>
       </div>
     );
   }
