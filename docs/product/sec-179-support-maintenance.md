@@ -93,6 +93,31 @@ Rota `#/support`:
 - meta operacional não é garantia ou SLA contratual;
 - suporte contratado/faturado deverá ser definido por plano comercial e contrato.
 
+## Validação DEV/STAGE — 2026-09-11
+
+### DEV
+- migration `0022_support_maintenance.sql` aplicada transacionalmente;
+- 3 tabelas de suporte presentes e com RLS habilitado;
+- `authenticated` sem `SELECT` ou `INSERT` direto em `support_tickets`;
+- `authenticated` executa as RPCs autorizadas e `anonymous` não;
+- constraint `support_target_non_contractual` presente.
+
+### STAGE
+- mesma migration `0022` aplicada transacionalmente;
+- 3 tabelas com RLS e sem acesso direto do browser;
+- Admin Organização configurou meta `high` de 30 min resposta / 240 min resolução com `contractual=false`;
+- Owner Fazenda A abriu ticket na câmera privada A e recebeu snapshot das metas;
+- Owner Fazenda A visualizou 1 ticket privado; Admin Bairro visualizou 0 desse ticket;
+- Família Fazenda A visualizou o ticket privado; Monitoramento Fazenda A visualizou o ticket privado; Técnico apenas de bairro visualizou 0 do ticket privado;
+- tentativa de Owner Fazenda A abrir ticket na câmera privada da Fazenda B retornou `support_scope_access_denied` e não criou registro;
+- Admin Bairro abriu ticket comunitário, atribuiu ao Técnico do bairro e o Técnico atualizou para `in_progress`;
+- Owner Fazenda A atualizou seu ticket privado para `triaged`;
+- fixtures sintéticos SEC-179 foram removidos ao final: 0 tickets, 0 metas e 0 logs sintéticos restantes.
+
+### PROD
+- nenhuma migration SEC-179 aplicada;
+- PROD permanece fora desta fase.
+
 ## Aceite
 1. zero acesso direto às tabelas de suporte pelo browser;
 2. `anonymous` não executa RPCs;
