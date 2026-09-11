@@ -65,6 +65,7 @@ jobs:
           pnpm migrations:check
           pnpm rbac:check
           pnpm privileges:check
+          pnpm invitations:check
           pnpm http-security:check
           pnpm auth:check
           pnpm deploy:check

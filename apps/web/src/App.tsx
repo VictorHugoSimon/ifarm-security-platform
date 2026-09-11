@@ -1,1 +1,114 @@
-import { useEffect,useState } from 'react';import { AssetSecurity } from './AssetSecurity';import { AuthGate } from './AuthGate';import { CommunityCenter } from './CommunityCenter';import { DeviceSetup } from './DeviceSetup';import { EventCenter } from './EventCenter';import { EvidenceVault } from './EvidenceVault';import { IncidentCenter } from './IncidentCenter';import { InsuranceCenter } from './InsuranceCenter';import { OperationsSOC } from './OperationsSOC';import { RuralStructure } from './RuralStructure';import { SecurityMap } from './SecurityMap';import { SOSCenter } from './SOSCenter';import { TelemetrySetup } from './TelemetrySetup';import { neon } from './lib/neon';const modules=[['Operations / SOC','Saúde da rede, fila de atenção, SOS e incidentes sem presumir monitoramento humano'],['Mapa de Segurança','Propriedades, áreas, dispositivos e incidentes georreferenciados'],['iFarm SOS','Pedido de assistência interno com localização e incidente crítico'],['Asset Security','Máquinas, GPS, geofence, documentos e manutenção'],['Security + Insurance','Apólices, cotação, renovação e sinistro via parceiros habilitados'],['Community','Participantes, pontos comunitários, rotas autorizadas e manutenção do bairro']];type Organization={id:string;name:string;status:string};function Dashboard(){const session=neon.auth.useSession();const[organizations,setOrganizations]=useState<Organization[]>([]);const[accessMessage,setAccessMessage]=useState('Carregando permissões…');const[activating,setActivating]=useState(false);async function loadAccess(){const result=await neon.from('organizations').select('id,name,status');if(result.error){setAccessMessage('Não foi possível consultar as permissões.');return;}const rows=(result.data||[]) as Organization[];setOrganizations(rows);setAccessMessage(rows.length?`${rows.length} organização(ões) autorizada(s)`:'Conta autenticada, mas sem acesso ativado.')}async function claimAccess(){setActivating(true);try{const result=await neon.rpc('claim_my_invited_access');if(result.error)setAccessMessage('A ativação exige convite válido e e-mail verificado.');else await loadAccess()}finally{setActivating(false)}}useEffect(()=>{void loadAccess()},[]);return <div className="shell"><aside><div className="brand">iFARM <strong>SECURITY</strong></div><nav>{['Visão Geral','Operações','SOS','Ativos','Insurance','Bairro','Estrutura Rural','Dispositivos','Mapa','Saúde da Rede','Eventos','Alertas','Incidentes','Evidências','Configurações'].map((item,i)=><button key={item} className={i===0?'active':''}>{item}</button>)}</nav></aside><main><header><div><span className="eyebrow">CENTRAL DE SEGURANÇA RURAL</span><h1>Visão Geral</h1></div><div className="header-actions"><span className="status">● Sessão autenticada</span><button className="secondary" onClick={()=>void neon.auth.signOut()}>Sair</button></div></header><section className="identity-strip"><div><small>USUÁRIO</small><strong>{session.data?.user.email}</strong></div><div><small>ACESSO</small><strong>{accessMessage}</strong></div>{!organizations.length&&<button className="primary compact" onClick={()=>void claimAccess()} disabled={activating}>{activating?'Ativando…':'Ativar convite'}</button>}</section><section className="metrics"><article><span>Security Map</span><b>DEV</b><small>PostGIS + RLS</small></article><article><span>Operações</span><b>SOC</b><small>sem monitoramento presumido</small></article><article><span>Community</span><b>OPT</b><small>adesão do proprietário</small></article><article><span>Privado</span><b>LOCK</b><small>nunca herdado pelo bairro</small></article></section><OperationsSOC/><SOSCenter/><AssetSecurity/><InsuranceCenter/><CommunityCenter/><RuralStructure/><DeviceSetup/><TelemetrySetup/><EventCenter/><IncidentCenter/><EvidenceVault/><SecurityMap/><section><h2>Módulos do MVP</h2><div className="grid">{modules.map(([title,text])=><article className="module" key={title}><h3>{title}</h3><p>{text}</p></article>)}</div></section><section className="notice"><strong>Operations by Design</strong><p>O painel operacional agrega sinais técnicos e ocorrências autorizadas. Ele não ativa, por si só, serviço humano 24×7 nem despacho de autoridade pública.</p></section></main></div>}export function App(){return <AuthGate><Dashboard/></AuthGate>}
+import { useEffect, useState } from 'react';
+import { AccessManagement } from './AccessManagement';
+import { AssetSecurity } from './AssetSecurity';
+import { AuthGate } from './AuthGate';
+import { CommunityCenter } from './CommunityCenter';
+import { DeviceSetup } from './DeviceSetup';
+import { EventCenter } from './EventCenter';
+import { EvidenceVault } from './EvidenceVault';
+import { IncidentCenter } from './IncidentCenter';
+import { InsuranceCenter } from './InsuranceCenter';
+import { OperationsSOC } from './OperationsSOC';
+import { RuralStructure } from './RuralStructure';
+import { SecurityMap } from './SecurityMap';
+import { SOSCenter } from './SOSCenter';
+import { TelemetrySetup } from './TelemetrySetup';
+import { neon } from './lib/neon';
+
+const modules = [
+  ['Operations / SOC', 'Saúde da rede, fila de atenção, SOS e incidentes sem presumir monitoramento humano'],
+  ['Mapa de Segurança', 'Propriedades, áreas, dispositivos e incidentes georreferenciados'],
+  ['iFarm SOS', 'Pedido de assistência interno com localização e incidente crítico'],
+  ['Asset Security', 'Máquinas, GPS, geofence, documentos e manutenção'],
+  ['Security + Insurance', 'Apólices, cotação, renovação e sinistro via parceiros habilitados'],
+  ['Community', 'Participantes, pontos comunitários, rotas autorizadas e manutenção do bairro']
+];
+
+type Organization = { id: string; name: string; status: string };
+
+function Dashboard() {
+  const session = neon.auth.useSession();
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [accessMessage, setAccessMessage] = useState('Carregando permissões…');
+  const [activating, setActivating] = useState(false);
+
+  async function loadAccess() {
+    const result = await neon.from('organizations').select('id,name,status');
+    if (result.error) {
+      setAccessMessage('Não foi possível consultar as permissões.');
+      return;
+    }
+    const rows = (result.data || []) as Organization[];
+    setOrganizations(rows);
+    setAccessMessage(rows.length ? `${rows.length} organização(ões) autorizada(s)` : 'Conta autenticada, mas sem acesso ativado.');
+  }
+
+  async function claimAccess() {
+    setActivating(true);
+    try {
+      const result = await neon.rpc('claim_my_invited_access');
+      if (result.error) setAccessMessage('A ativação exige convite válido e e-mail verificado.');
+      else await loadAccess();
+    } finally {
+      setActivating(false);
+    }
+  }
+
+  useEffect(() => { void loadAccess(); }, []);
+
+  return (
+    <div className="shell">
+      <aside>
+        <div className="brand">iFARM <strong>SECURITY</strong></div>
+        <nav>
+          {['Visão Geral','Operações','SOS','Ativos','Insurance','Bairro','Estrutura Rural','Dispositivos','Acessos','Mapa','Saúde da Rede','Eventos','Alertas','Incidentes','Evidências','Configurações'].map((item, index) => (
+            <button key={item} className={index === 0 ? 'active' : ''}>{item}</button>
+          ))}
+        </nav>
+      </aside>
+      <main>
+        <header>
+          <div><span className="eyebrow">CENTRAL DE SEGURANÇA RURAL</span><h1>Visão Geral</h1></div>
+          <div className="header-actions"><span className="status">● Sessão autenticada</span><button className="secondary" onClick={() => void neon.auth.signOut()}>Sair</button></div>
+        </header>
+
+        <section className="identity-strip">
+          <div><small>USUÁRIO</small><strong>{session.data?.user.email}</strong></div>
+          <div><small>ACESSO</small><strong>{accessMessage}</strong></div>
+          {!organizations.length && <button className="primary compact" onClick={() => void claimAccess()} disabled={activating}>{activating ? 'Ativando…' : 'Ativar convite'}</button>}
+        </section>
+
+        <section className="metrics">
+          <article><span>Security Map</span><b>DEV</b><small>PostGIS + RLS</small></article>
+          <article><span>Operações</span><b>SOC</b><small>sem monitoramento presumido</small></article>
+          <article><span>Community</span><b>OPT</b><small>adesão do proprietário</small></article>
+          <article><span>Privado</span><b>LOCK</b><small>nunca herdado pelo bairro</small></article>
+        </section>
+
+        <OperationsSOC />
+        <SOSCenter />
+        <AssetSecurity />
+        <InsuranceCenter />
+        <CommunityCenter />
+        <RuralStructure />
+        <DeviceSetup />
+        <AccessManagement />
+        <TelemetrySetup />
+        <EventCenter />
+        <IncidentCenter />
+        <EvidenceVault />
+        <SecurityMap />
+
+        <section>
+          <h2>Módulos do MVP</h2>
+          <div className="grid">{modules.map(([title, text]) => <article className="module" key={title}><h3>{title}</h3><p>{text}</p></article>)}</div>
+        </section>
+        <section className="notice"><strong>Operations by Design</strong><p>O painel operacional agrega sinais técnicos e ocorrências autorizadas. Ele não ativa, por si só, serviço humano 24×7 nem despacho de autoridade pública.</p></section>
+      </main>
+    </div>
+  );
+}
+
+export function App() {
+  return <AuthGate><Dashboard /></AuthGate>;
+}
