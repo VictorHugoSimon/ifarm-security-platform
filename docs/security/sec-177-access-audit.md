@@ -52,14 +52,36 @@ O helper `app_can_view_access_audit` e a função de trigger não são RPCs púb
 ## UI
 `AccessAuditCenter.tsx` usa exclusivamente `neon.rpc('list_access_audit_events', ...)` e nunca consulta `audit_logs` diretamente.
 
+## Evidência DEV / STAGE
+A migration `0021_access_audit_center.sql` foi aplicada primeiro no DEV e depois no STAGE.
+
+DEV:
+- `authenticated` SELECT direto em `audit_logs`: `false`;
+- `anonymous` SELECT direto em `audit_logs`: `false`;
+- `authenticated` EXECUTE em `list_access_audit_events`: `true`;
+- `anonymous` EXECUTE na RPC: `false`;
+- trigger `trg_access_invitation_accepted_audit`: 1;
+- sem sessão: 0 eventos visíveis.
+
+STAGE:
+- os mesmos grants/trigger foram confirmados;
+- Admin Organização: 3 eventos no cenário de teste (2 privados existentes + 1 comunitário sintético temporário);
+- Admin Bairro: 1 evento comunitário e nenhum evento privado;
+- Owner Fazenda A: 2 eventos privados da Fazenda A e nenhum comunitário;
+- Família Fazenda A: 0 eventos;
+- Técnico comunitário: 0 eventos;
+- Monitoramento Fazenda A: 0 eventos;
+- trigger de aceite: 1 `access.invitation.accepted` gerado, com ator `50000000-0000-4000-8000-000000000003` (Owner QA Fazenda A);
+- fixtures temporários de auditoria/convite foram removidos ao final: 0 remanescentes.
+
 ## Critérios de aceite
-1. `authenticated` perde SELECT direto em `audit_logs`;
-2. `anonymous` não executa a RPC;
-3. Admin Organização visualiza eventos da organização;
-4. Admin Bairro não visualiza evento de propriedade privada;
-5. Owner Fazenda A não visualiza Fazenda B;
-6. Família/Técnico/Monitoramento recebem zero eventos;
-7. aceite de convite gera `access.invitation.accepted`;
-8. UI não recebe/renderiza `details`, e-mail, IP, request id ou hash de e-mail;
-9. limite server-side fica entre 1 e 500 registros;
-10. aplicar DEV primeiro, depois STAGE. PROD permanece intocado.
+1. `authenticated` perde SELECT direto em `audit_logs` — validado;
+2. `anonymous` não executa a RPC — validado;
+3. Admin Organização visualiza eventos da organização — validado;
+4. Admin Bairro não visualiza evento de propriedade privada — validado;
+5. Owner Fazenda A não visualiza eventos fora da própria propriedade — validado;
+6. Família/Técnico/Monitoramento recebem zero eventos — validado;
+7. aceite de convite gera `access.invitation.accepted` — validado;
+8. UI não recebe/renderiza `details`, e-mail, IP, request id ou hash de e-mail — gate CI;
+9. limite server-side fica entre 1 e 500 registros — implementado;
+10. DEV primeiro, depois STAGE; PROD permanece intocado — validado.
