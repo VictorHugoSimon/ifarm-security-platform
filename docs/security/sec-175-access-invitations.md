@@ -1,6 +1,6 @@
 # SEC-175 — Gestão de convites e acessos
 
-Data de referência: 2026-09-10.
+Data de referência: 2026-09-11.
 
 ## Objetivo
 Criar uma superfície vendável e auditável para delegação de acessos tenant sem permitir escalada de privilégio ou mistura entre área comunitária e propriedade privada.
@@ -35,7 +35,7 @@ A própria constraint da tabela exclui esses três papéis e `claim_my_invited_a
 - um único convite `pending` por organização + bairro + propriedade + e-mail + papel;
 - convite vencido não pode ser reivindicado;
 - membership já ativo no mesmo papel/escopo bloqueia novo convite;
-- revogação é lógica (`revoked`), nunca delete;
+- revogação é lógica (`revoked`), nunca delete no fluxo do produto;
 - `revoked_at` e `revoked_by_user_id` são registrados;
 - audit log registra somente SHA-256 do e-mail, não o endereço em claro.
 
@@ -53,17 +53,47 @@ O helper `app_can_delegate_invitation` é interno e não recebe grant de execuç
 ## UI
 `AccessManagement.tsx` permite criar, listar e revogar convites. A interface oferece organização, papel, escopo e validade, mas a autorização final sempre é do banco. Mensagens de erro não transformam falha de autorização em acesso.
 
-## Aceite de segurança
-Testar com a matriz sintética SEC-150:
-1. Admin Organização cria convite de Owner/Família para Fazenda A;
-2. Admin Bairro cria Técnico/Monitoramento comunitário;
-3. Admin Bairro é bloqueado ao tentar qualquer convite para Fazenda A/B;
-4. Owner A cria Família/Técnico somente em A;
-5. Owner A é bloqueado em B e ao tentar Admin Bairro/Admin Organização;
-6. Técnico/Família/Monitoramento não criam convites;
-7. papéis `admin_ifarm`, `authorized_authority`, `insurance_partner` são rejeitados;
-8. `anonymous` não executa as RPCs;
-9. tabela mantém zero grants diretos de browser;
-10. revogação gera status e auditoria sem delete.
+## Evidência de validação
+A migration `0019_access_invitations.sql` foi aplicada primeiro em DEV e depois em STAGE. PROD não foi alterado.
 
-Aplicar DEV primeiro, depois STAGE. PROD permanece intocado.
+DEV pós-migration:
+- `revoked_at` e `revoked_by_user_id`: 2/2 colunas presentes;
+- índice parcial `ux_access_invitations_pending_scope`: presente;
+- quatro funções principais confirmadas como `SECURITY DEFINER`;
+- `authenticated` possui EXECUTE nas RPCs aprovadas;
+- `anonymous` não executa `create_access_invitation`;
+- `authenticated` e `anonymous` permanecem sem DML direto em `access_invitations`.
+
+O DEV está vazio por desenho, sem identidades persistidas, então os caminhos positivos de RBAC foram executados no STAGE usando exclusivamente os fixtures sintéticos SEC-150 já existentes.
+
+Matriz STAGE, uma identidade/JWT por transação:
+- Admin Organização: pode delegar Técnico comunitário e Owner de propriedade; não pode criar outro Admin Organização; não pode criar Autoridade;
+- Admin Bairro: pode delegar Técnico/Monitoramento comunitário; não pode delegar acesso privado nem novo Admin Bairro;
+- Owner Fazenda A: pode delegar Família/Funcionário/Técnico na Fazenda A; não pode delegar Família na Fazenda B nem outro Owner;
+- Família Fazenda A: não delega Funcionário nem Monitoramento;
+- Técnico comunitário: não delega Monitoramento nem Família;
+- Monitoramento Fazenda A: não delega Família nem Técnico.
+
+Um primeiro teste que trocou múltiplos JWTs dentro da mesma transação gerou um resultado inconsistente para Admin Organização por causa do contexto de sessão JWT estável. Esse cenário não representa o Data API real. O teste foi repetido corretamente com uma identidade por transação e passou conforme a matriz acima.
+
+Smoke real das RPCs no STAGE, com role `authenticated` e Owner Fazenda A:
+1. `create_access_invitation` criou convite sintético de `family` para Fazenda A;
+2. `list_access_invitations` retornou o convite somente no escopo permitido;
+3. `revoke_access_invitation` alterou o convite para revogado com sucesso;
+4. o convite e os audit logs criados exclusivamente pelo smoke foram removidos após o teste;
+5. ficaram **0** registros do endereço sintético usado no smoke.
+
+## Aceite de segurança
+Validado:
+1. Admin Organização delega papéis inferiores no próprio tenant;
+2. Admin Bairro delega apenas Técnico/Monitoramento comunitário;
+3. Admin Bairro é bloqueado em propriedade privada;
+4. Owner A delega Família/Funcionário/Técnico somente em A;
+5. Owner A é bloqueado em B e ao tentar delegar Owner;
+6. Técnico/Família/Monitoramento não criam convites;
+7. papéis `admin_ifarm`, `authorized_authority`, `insurance_partner` ficam fora do convite genérico;
+8. `anonymous` não executa a RPC de criação;
+9. tabela mantém zero grants diretos de browser;
+10. revogação lógica e auditoria foram exercitadas via RPC real.
+
+DEV e STAGE validados. PROD permanece intocado.
