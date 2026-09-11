@@ -14,6 +14,7 @@ import { OperationsSOC } from './OperationsSOC';
 import { RuralStructure } from './RuralStructure';
 import { SecurityMap } from './SecurityMap';
 import { SOSCenter } from './SOSCenter';
+import { SupportCenter } from './SupportCenter';
 import { TelemetrySetup } from './TelemetrySetup';
 import { neon } from './lib/neon';
 
@@ -23,7 +24,8 @@ const modules = [
   ['iFarm SOS', 'Pedido de assistência interno com localização e incidente crítico'],
   ['Asset Security', 'Máquinas, GPS, geofence, documentos e manutenção'],
   ['Security + Insurance', 'Apólices, cotação, renovação e sinistro via parceiros habilitados'],
-  ['Community', 'Participantes, pontos comunitários, rotas autorizadas e manutenção do bairro']
+  ['Community', 'Participantes, pontos comunitários, rotas autorizadas e manutenção do bairro'],
+  ['Suporte', 'Chamados técnicos, manutenção e metas operacionais não contratuais']
 ];
 
 const navItems = [
@@ -35,6 +37,7 @@ const navItems = [
   { key: 'community', label: 'Bairro', title: 'Bairro Rural Conectado' },
   { key: 'rural', label: 'Estrutura Rural', title: 'Estrutura Rural' },
   { key: 'devices', label: 'Dispositivos', title: 'Dispositivos' },
+  { key: 'support', label: 'Suporte', title: 'Suporte e Manutenção' },
   { key: 'access', label: 'Acessos', title: 'Gestão de Acessos' },
   { key: 'audit', label: 'Auditoria', title: 'Auditoria de Acessos' },
   { key: 'health', label: 'Saúde da Rede', title: 'Saúde da Rede' },
@@ -83,6 +86,7 @@ function RouteContent({ route }: { route: RouteKey }) {
     case 'community': return <CommunityCenter />;
     case 'rural': return <RuralStructure />;
     case 'devices': return <DeviceSetup />;
+    case 'support': return <SupportCenter />;
     case 'access': return <><AccessManagement /><MembershipManagement /></>;
     case 'audit': return <AccessAuditCenter />;
     case 'health': return <TelemetrySetup />;

@@ -10,13 +10,13 @@ const requireInvariant = (condition, message) => {
 };
 
 for (const route of [
-  'overview','operations','sos','assets','insurance','community','rural','devices','access','audit','health','events','incidents','evidence','map'
+  'overview','operations','sos','assets','insurance','community','rural','devices','support','access','audit','health','events','incidents','evidence','map'
 ]) {
   requireInvariant(app.includes(`key: '${route}'`), `missing route: ${route}`);
 }
 
 for (const component of [
-  '<OperationsSOC />','<SOSCenter />','<AssetSecurity />','<InsuranceCenter />','<CommunityCenter />','<RuralStructure />','<DeviceSetup />','<AccessManagement />','<MembershipManagement />','<AccessAuditCenter />','<TelemetrySetup />','<EventCenter />','<IncidentCenter />','<EvidenceVault />','<SecurityMap />'
+  '<OperationsSOC />','<SOSCenter />','<AssetSecurity />','<InsuranceCenter />','<CommunityCenter />','<RuralStructure />','<DeviceSetup />','<SupportCenter />','<AccessManagement />','<MembershipManagement />','<AccessAuditCenter />','<TelemetrySetup />','<EventCenter />','<IncidentCenter />','<EvidenceVault />','<SecurityMap />'
 ]) {
   requireInvariant(app.includes(component), `route component missing: ${component}`);
 }
