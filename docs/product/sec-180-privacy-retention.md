@@ -106,6 +106,35 @@ Eventos globais:
 
 Timeline própria registra criação, mudança de status e cancelamento.
 
+## Validação DEV/STAGE — 2026-09-11
+
+### DEV
+- migration `0023_privacy_retention.sql` aplicada em uma única transação;
+- 3 tabelas presentes e 3 com RLS;
+- `authenticated` sem SELECT/INSERT direto em `privacy_requests`;
+- `authenticated` executa RPC autorizada; `anonymous` não;
+- constraints `retention_no_automatic_deletion` e `privacy_no_automatic_execution` presentes;
+- corpo de `update_privacy_request_status` confirmado com `privacy_deletion_execution_not_implemented` e `automated_execution_enabled=false`.
+
+### STAGE
+- mesma migration `0023` aplicada em uma única transação;
+- 3 tabelas com RLS; browser sem acesso direto; RPC administrativa indisponível para `anonymous`;
+- Admin Organização tentou aprovar política sem referência jurídica/DPO e recebeu `legal_review_reference_required`;
+- com referência `QA-DPO-SEC180`, política de evidências foi aprovada mantendo `automated_deletion_enabled=false` e `legal_review_required=true`;
+- Owner Fazenda A abriu pedido `deletion` na própria Fazenda A e o pedido ficou `automated_execution_enabled=false`;
+- Owner Fazenda A tentou abrir solicitação na Fazenda B e recebeu `privacy_property_access_denied`;
+- Admin Bairro recebeu 0 solicitações gerenciáveis do pedido privado;
+- Admin Organização visualizou o pedido e recebeu `deletion_execution_supported=false` + `legal_hold_review_required=true`;
+- Admin Organização alterou `received → under_review → approved` com registro de resposta/referência;
+- tentativa de `approved → fulfilled` no pedido de exclusão foi bloqueada por `privacy_deletion_execution_not_implemented`;
+- Família Fazenda A abriu pedido próprio de acesso; Owner Fazenda A continuou vendo apenas sua própria solicitação (`family_leak=0`);
+- Família cancelou a própria solicitação elegível com sucesso;
+- fixtures SEC-180 foram removidos ao final: 0 solicitações, 0 políticas e 0 logs sintéticos restantes.
+
+### PROD
+- nenhuma migration SEC-180 aplicada;
+- PROD permanece fora desta fase.
+
 ## Critérios de aceite
 1. nenhuma tabela de privacy/retention acessível diretamente pelo browser;
 2. `anonymous` não executa RPCs;
