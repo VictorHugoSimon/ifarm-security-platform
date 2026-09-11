@@ -8,6 +8,7 @@ import { EventCenter } from './EventCenter';
 import { EvidenceVault } from './EvidenceVault';
 import { IncidentCenter } from './IncidentCenter';
 import { InsuranceCenter } from './InsuranceCenter';
+import { MembershipManagement } from './MembershipManagement';
 import { OperationsSOC } from './OperationsSOC';
 import { RuralStructure } from './RuralStructure';
 import { SecurityMap } from './SecurityMap';
@@ -93,6 +94,7 @@ function Dashboard() {
         <RuralStructure />
         <DeviceSetup />
         <AccessManagement />
+        <MembershipManagement />
         <TelemetrySetup />
         <EventCenter />
         <IncidentCenter />
