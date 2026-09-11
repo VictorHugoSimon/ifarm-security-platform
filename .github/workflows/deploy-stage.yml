@@ -70,6 +70,7 @@ jobs:
           pnpm access-audit:check
           pnpm navigation:check
           pnpm support:check
+          pnpm privacy:check
           pnpm http-security:check
           pnpm auth:check
           pnpm deploy:check
