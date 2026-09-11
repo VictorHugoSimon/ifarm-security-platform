@@ -68,6 +68,7 @@ jobs:
           pnpm invitations:check
           pnpm memberships:check
           pnpm access-audit:check
+          pnpm navigation:check
           pnpm http-security:check
           pnpm auth:check
           pnpm deploy:check

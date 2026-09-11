@@ -43,6 +43,8 @@ jobs:
         run: pnpm memberships:check
       - name: Access audit invariants
         run: pnpm access-audit:check
+      - name: Navigation invariants
+        run: pnpm navigation:check
       - name: HTTP security invariants
         run: pnpm http-security:check
       - name: Auth readiness invariants
