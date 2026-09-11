@@ -4,6 +4,7 @@ import { App } from './App';
 import './styles.css';
 import './access-management.css';
 import './membership-management.css';
+import './access-audit.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode><App /></React.StrictMode>

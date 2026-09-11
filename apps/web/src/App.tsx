@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AccessAuditCenter } from './AccessAuditCenter';
 import { AccessManagement } from './AccessManagement';
 import { AssetSecurity } from './AssetSecurity';
 import { AuthGate } from './AuthGate';
@@ -62,7 +63,7 @@ function Dashboard() {
       <aside>
         <div className="brand">iFARM <strong>SECURITY</strong></div>
         <nav>
-          {['Visão Geral','Operações','SOS','Ativos','Insurance','Bairro','Estrutura Rural','Dispositivos','Acessos','Mapa','Saúde da Rede','Eventos','Alertas','Incidentes','Evidências','Configurações'].map((item, index) => (
+          {['Visão Geral','Operações','SOS','Ativos','Insurance','Bairro','Estrutura Rural','Dispositivos','Acessos','Auditoria','Mapa','Saúde da Rede','Eventos','Alertas','Incidentes','Evidências','Configurações'].map((item, index) => (
             <button key={item} className={index === 0 ? 'active' : ''}>{item}</button>
           ))}
         </nav>
@@ -95,6 +96,7 @@ function Dashboard() {
         <DeviceSetup />
         <AccessManagement />
         <MembershipManagement />
+        <AccessAuditCenter />
         <TelemetrySetup />
         <EventCenter />
         <IncidentCenter />
