@@ -11,6 +11,7 @@
     "rbac:check": "node scripts/rbac-check.mjs",
     "privileges:check": "node scripts/privilege-hardening-check.mjs",
     "invitations:check": "node scripts/access-invitation-check.mjs",
+    "memberships:check": "node scripts/membership-lifecycle-check.mjs",
     "http-security:check": "node scripts/http-security-check.mjs",
     "auth:check": "node scripts/auth-readiness-check.mjs",
     "deploy:check": "node scripts/deploy-readiness-check.mjs",
