@@ -49,6 +49,8 @@ jobs:
         run: pnpm support:check
       - name: Privacy retention invariants
         run: pnpm privacy:check
+      - name: Pilot readiness invariants
+        run: pnpm pilot:check
       - name: HTTP security invariants
         run: pnpm http-security:check
       - name: Auth readiness invariants
