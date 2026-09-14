@@ -21,30 +21,16 @@ O Pilot Center não comprova prevenção de crimes e não presume operação hum
 ### `pilot_programs`
 Programa do piloto por organização/bairro.
 
-Status:
-- `draft`;
-- `readiness`;
-- `active`;
-- `paused`;
-- `completed`;
-- `cancelled`.
+Status: `draft`, `readiness`, `active`, `paused`, `completed`, `cancelled`.
 
 `target_property_count` é limitado entre 5 e 10.
 
 ### `pilot_properties`
 Relaciona propriedades convidadas ao piloto.
 
-Participação:
-- `invited`;
-- `confirmed`;
-- `declined`;
-- `removed`.
+Participação: `invited`, `confirmed`, `declined`, `removed`.
 
-Instalação:
-- `pending`;
-- `scheduled`;
-- `installed`;
-- `validated`.
+Instalação: `pending`, `scheduled`, `installed`, `validated`.
 
 A confirmação grava `confirmed_by_user_id` e `confirmed_at`.
 
@@ -89,15 +75,15 @@ Chaves iniciais:
 - Admin iFarm;
 - Admin Organização;
 - Admin Bairro no próprio bairro;
-- Monitoramento no próprio bairro.
+- Monitoramento quando possuir membership de bairro (`property_id IS NULL`).
 
-Essa leitura não concede acesso direto a câmera privada, gravação, Evidence Vault ou dados de outra propriedade.
+Essa leitura não concede acesso direto a câmera privada, gravação, Evidence Vault ou dados de outra propriedade. Um perfil de Monitoramento limitado a uma propriedade não recebe automaticamente visão agregada do bairro.
 
 ### Confirmação da propriedade
 Somente Owner ativo da própria propriedade convidada.
 
 ### Instalação
-Admin autorizado ou Técnico com membership ativo da propriedade confirmada.
+Admin autorizado ou Técnico com membership ativo da propriedade confirmada. Técnico somente comunitário não administra instalação privada.
 
 ## Ativação
 `active` exige de 5 a 10 propriedades com `participation_status='confirmed'`.
@@ -156,6 +142,43 @@ Eventos:
 - `pilot.property.confirmed`;
 - `pilot.program.status_changed`.
 
+## Evidência de validação DEV/STAGE — 2026-09-14
+### DEV
+Migration `0024_pilot_readiness.sql` aplicada. Resultado:
+- 4 tabelas de piloto presentes;
+- RLS ativo nas 4;
+- `authenticated` sem SELECT direto em `pilot_programs`;
+- RPCs de piloto executáveis por `authenticated`;
+- `anonymous` sem execução das RPCs;
+- constraint de 5–10 propriedades presente;
+- constraint `source_kind='manual'` presente.
+
+### STAGE
+A mesma migration foi promovida para STAGE após CI #49 100% verde.
+
+Fixture não destrutivo mantido de forma explícita:
+- piloto: `QA-SEC181 Piloto Bairro Rural`;
+- organização/bairro: fixtures `QA-SEC150` existentes;
+- Fazenda A convidada e confirmada pelo Owner A;
+- Fazenda B convidada, mas não confirmada;
+- uma observação manual sintética de MRR (`R$ 2.500`) permanece marcada `source_kind=manual`;
+- um snapshot sistêmico permanece associado ao piloto.
+
+Validações observadas:
+- Owner A visualizou somente o convite da Fazenda A;
+- Owner A confirmou Fazenda A;
+- tentativa do Owner A de confirmar Fazenda B foi bloqueada por `pilot_owner_confirmation_required`;
+- Admin Bairro visualizou o piloto apenas pela visão agregada;
+- Owner A não recebeu visão agregada do Pilot Center (`0` pilotos em `list_pilot_programs`);
+- snapshot sistêmico contou exatamente 2 dispositivos: câmera comunitária + câmera privada da Fazenda A confirmada;
+- snapshot retornou `online_device_count=2` e `recent_heartbeat_count=0` conforme estado existente dos fixtures, sem inventar uptime histórico;
+- observação de MRR permaneceu `source_kind=manual`;
+- tentativa de ativar o piloto com apenas 1 propriedade confirmada foi bloqueada por `pilot_active_requires_5_to_10_confirmed_properties`;
+- Admin Bairro não conseguiu registrar KPI manual (`pilot_manual_metric_management_not_allowed`);
+- Técnico com membership apenas comunitário não conseguiu alterar instalação da Fazenda A (`pilot_installation_management_not_allowed`).
+
+Nenhum dado real de cliente foi usado. PROD não recebeu a migration.
+
 ## Critérios de aceite
 1. 5–10 propriedades como faixa estrutural do piloto;
 2. ativação bloqueada com menos de 5 ou mais de 10 confirmadas;
@@ -166,6 +189,6 @@ Eventos:
 7. métricas manuais têm `source_kind=manual` obrigatório;
 8. evento rejeitado não é automaticamente tratado como falso positivo;
 9. nenhuma exposição de Evidence Vault/storage/gravação;
-10. Admin Bairro/Monitoramento têm somente visão agregada autorizada;
+10. Admin Bairro/Monitoramento têm somente visão agregada autorizada conforme o escopo do membership;
 11. DEV → STAGE antes de qualquer avanço;
 12. PROD permanece intocado nesta fase.
