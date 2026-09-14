@@ -18,10 +18,11 @@ req(migration.includes("m.status='active'")&&migration.includes("u.status='activ
 req(app.includes("neon.rpc('get_my_navigation_modules')"),'frontend must load navigation through the sanitized RPC.');
 req(app.includes("new Set<RouteKey>(['overview'])"),'frontend must default fail-closed to overview only.');
 req(app.includes('const visibleNavItems = useMemo(() => navItems.filter((item) => allowedModules.has(item.key))'),'menu must filter by allowed modules.');
-req(app.includes('const effectiveRoute: RouteKey = navigationLoaded && allowedModules.has(route) ? route : \'overview\''),'route content must remain fail-closed until capability load.');
+req(app.includes("const effectiveRoute: RouteKey = navigationLoaded && allowedModules.has(route) ? route : 'overview'"),'route content must remain fail-closed until capability load.');
 req(app.includes("if (!navigationLoaded || allowedModules.has(route)) return;"),'hidden deep-links must be normalized after capability load.');
 req(app.includes('<RouteContent route={effectiveRoute} />'),'only effective authorized route may mount.');
-req(app.includes('else await Promise.all([loadAccess(), loadNavigation()]);'),'claiming an invitation must refresh navigation capabilities.');
+req(app.includes('async function refreshAccessContext()'),'access context refresh helper must exist.');
+req(app.includes('else await refreshAccessContext();'),'claiming an invitation must refresh access and navigation capabilities together.');
 req(!app.includes('{navItems.map((item) => ('),'full static navigation rendering is forbidden.');
 
 console.log('Access-aware navigation check passed: sanitized module keys, active-membership derivation, fail-closed rendering and deep-link normalization preserved.');
