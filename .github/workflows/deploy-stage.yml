@@ -69,6 +69,7 @@ jobs:
           pnpm memberships:check
           pnpm access-audit:check
           pnpm navigation:check
+          pnpm access-navigation:check
           pnpm support:check
           pnpm privacy:check
           pnpm pilot:check
