@@ -11,6 +11,7 @@ import { IncidentCenter } from './IncidentCenter';
 import { InsuranceCenter } from './InsuranceCenter';
 import { MembershipManagement } from './MembershipManagement';
 import { OperationsSOC } from './OperationsSOC';
+import { PrivacyRetentionCenter } from './PrivacyRetentionCenter';
 import { RuralStructure } from './RuralStructure';
 import { SecurityMap } from './SecurityMap';
 import { SOSCenter } from './SOSCenter';
@@ -25,7 +26,8 @@ const modules = [
   ['Asset Security', 'Máquinas, GPS, geofence, documentos e manutenção'],
   ['Security + Insurance', 'Apólices, cotação, renovação e sinistro via parceiros habilitados'],
   ['Community', 'Participantes, pontos comunitários, rotas autorizadas e manutenção do bairro'],
-  ['Suporte', 'Chamados técnicos, manutenção e metas operacionais não contratuais']
+  ['Suporte', 'Chamados técnicos, manutenção e metas operacionais não contratuais'],
+  ['Privacidade', 'Solicitações LGPD e políticas de retenção sem exclusão automática']
 ];
 
 const navItems = [
@@ -38,6 +40,7 @@ const navItems = [
   { key: 'rural', label: 'Estrutura Rural', title: 'Estrutura Rural' },
   { key: 'devices', label: 'Dispositivos', title: 'Dispositivos' },
   { key: 'support', label: 'Suporte', title: 'Suporte e Manutenção' },
+  { key: 'privacy', label: 'Privacidade', title: 'Privacidade e Retenção' },
   { key: 'access', label: 'Acessos', title: 'Gestão de Acessos' },
   { key: 'audit', label: 'Auditoria', title: 'Auditoria de Acessos' },
   { key: 'health', label: 'Saúde da Rede', title: 'Saúde da Rede' },
@@ -87,6 +90,7 @@ function RouteContent({ route }: { route: RouteKey }) {
     case 'rural': return <RuralStructure />;
     case 'devices': return <DeviceSetup />;
     case 'support': return <SupportCenter />;
+    case 'privacy': return <PrivacyRetentionCenter />;
     case 'access': return <><AccessManagement /><MembershipManagement /></>;
     case 'audit': return <AccessAuditCenter />;
     case 'health': return <TelemetrySetup />;
