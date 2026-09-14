@@ -71,6 +71,7 @@ jobs:
           pnpm navigation:check
           pnpm support:check
           pnpm privacy:check
+          pnpm pilot:check
           pnpm http-security:check
           pnpm auth:check
           pnpm deploy:check
