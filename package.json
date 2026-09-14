@@ -15,6 +15,7 @@
     "access-audit:check": "node scripts/access-audit-check.mjs",
     "navigation:check": "node scripts/navigation-check.mjs",
     "access-navigation:check": "node scripts/access-aware-navigation-check.mjs",
+    "access-landing:check": "node scripts/access-landing-check.mjs",
     "support:check": "node scripts/support-maintenance-check.mjs",
     "privacy:check": "node scripts/privacy-retention-check.mjs",
     "pilot:check": "node scripts/pilot-readiness-check.mjs",
