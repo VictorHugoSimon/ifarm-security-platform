@@ -76,6 +76,7 @@ jobs:
           pnpm pilot:check
           pnpm http-security:check
           pnpm auth:check
+          pnpm auth-provider:check
           pnpm deploy:check
 
       - name: Install dependencies
