@@ -37,6 +37,28 @@ Antes da carga da RPC:
 
 As regras servem somente para exibição. Uma rota visível continua sujeita ao RBAC específico do módulo.
 
+## Evidência DEV/STAGE — 2026-09-14
+Migration `0025_access_aware_navigation.sql` aplicada em DEV e STAGE; PROD não recebeu a migration.
+
+### DEV
+- `authenticated` pode executar `get_my_navigation_modules()`;
+- `anonymous` não pode executar a RPC;
+- sem sessão autenticada a RPC retorna zero módulos.
+
+### STAGE — matriz QA
+Cada identidade foi testada em transação separada com JWT sintético SEC-150 e `SET LOCAL ROLE authenticated`.
+
+- Admin Organização: 18 módulos;
+- Admin Bairro: 16 módulos;
+- Owner Fazenda A: 17 módulos;
+- Família Fazenda A: 9 módulos;
+- Técnico Bairro: 12 módulos;
+- Monitoramento Fazenda A: 13 módulos.
+
+A RPC retornou somente `module_key`; nenhum role, `organization_id`, `neighborhood_id`, `property_id` ou `membership_id` foi retornado.
+
+A primeira chamada imediatamente após criação da função retornou zero módulos no STAGE; em sessão limpa, com `app_current_user_id()` e `app_has_org_role()` confirmados, a RPC retornou a matriz esperada e permaneceu estável. Esse resultado transitório não foi tratado como aprovação até a repetição isolada por identidade.
+
 ## Critérios de aceite
 1. menu não renderiza mais `navItems` completo;
 2. `overview` é o único fallback antes da resposta;
