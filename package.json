@@ -21,6 +21,7 @@
     "pilot:check": "node scripts/pilot-readiness-check.mjs",
     "http-security:check": "node scripts/http-security-check.mjs",
     "auth:check": "node scripts/auth-readiness-check.mjs",
+    "auth-provider:check": "node scripts/auth-provider-contract-check.mjs",
     "deploy:check": "node scripts/deploy-readiness-check.mjs",
     "stage:smoke": "node scripts/stage-smoke.mjs",
     "test": "pnpm -r --if-present test",
