@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AccessAuditCenter } from './AccessAuditCenter';
+import { AccessLanding } from './AccessLanding';
 import { AccessManagement } from './AccessManagement';
 import { AssetSecurity } from './AssetSecurity';
 import { AuthGate } from './AuthGate';
@@ -115,6 +116,8 @@ function Dashboard() {
   const [route, setRoute] = useState<RouteKey>(() => routeFromHash());
   const [allowedModules, setAllowedModules] = useState<Set<RouteKey>>(() => new Set<RouteKey>(['overview']));
   const [navigationLoaded, setNavigationLoaded] = useState(false);
+  const [accessLoaded, setAccessLoaded] = useState(false);
+  const [accessValidationFailed, setAccessValidationFailed] = useState(false);
 
   const effectiveRoute: RouteKey = navigationLoaded && allowedModules.has(route) ? route : 'overview';
   const currentNav = useMemo(() => navItems.find((item) => item.key === effectiveRoute) || navItems[0], [effectiveRoute]);
@@ -123,12 +126,16 @@ function Dashboard() {
   async function loadAccess() {
     const result = await neon.from('organizations').select('id,name,status');
     if (result.error) {
-      setAccessMessage('Não foi possível consultar as permissões.');
-      return;
+      setOrganizations([]);
+      setAccessMessage('Não foi possível validar o acesso desta sessão.');
+      setAccessLoaded(true);
+      return false;
     }
     const rows = (result.data || []) as Organization[];
     setOrganizations(rows);
     setAccessMessage(rows.length ? `${rows.length} organização(ões) autorizada(s)` : 'Conta autenticada, mas sem acesso ativado.');
+    setAccessLoaded(true);
+    return true;
   }
 
   async function loadNavigation() {
@@ -141,14 +148,24 @@ function Dashboard() {
     }
     setAllowedModules(next);
     setNavigationLoaded(true);
+    return !result.error;
+  }
+
+  async function refreshAccessContext() {
+    setAccessLoaded(false);
+    setNavigationLoaded(false);
+    setAccessValidationFailed(false);
+    setAllowedModules(new Set<RouteKey>(['overview']));
+    const [accessOk, navigationOk] = await Promise.all([loadAccess(), loadNavigation()]);
+    setAccessValidationFailed(!accessOk || !navigationOk);
   }
 
   async function claimAccess() {
     setActivating(true);
     try {
       const result = await neon.rpc('claim_my_invited_access');
-      if (result.error) setAccessMessage('A ativação exige convite válido e e-mail verificado.');
-      else await Promise.all([loadAccess(), loadNavigation()]);
+      if (result.error) setAccessMessage('Não foi possível ativar acesso para esta conta. Verifique se o convite continua válido.');
+      else await refreshAccessContext();
     } finally {
       setActivating(false);
     }
@@ -160,7 +177,7 @@ function Dashboard() {
     window.location.hash = `/${nextRoute}`;
   }
 
-  useEffect(() => { void Promise.all([loadAccess(), loadNavigation()]); }, []);
+  useEffect(() => { void refreshAccessContext(); }, []);
 
   useEffect(() => {
     const applyHash = () => setRoute(routeFromHash());
@@ -184,6 +201,21 @@ function Dashboard() {
   useEffect(() => {
     document.title = `${currentNav.title} · iFarm Security`;
   }, [currentNav]);
+
+  const accessContextLoaded = accessLoaded && navigationLoaded;
+  const hasAuthorizedSurface = organizations.length > 0 || allowedModules.size > 1;
+
+  if (!accessContextLoaded) {
+    return <AccessLanding email={session.data?.user.email} state="loading" message="Validando memberships ativos e módulos autorizados. Nenhum módulo do portal é carregado antes dessa verificação." activating={false} onActivate={()=>{}} onRetry={()=>void refreshAccessContext()} onSignOut={()=>void neon.auth.signOut()} />;
+  }
+
+  if (accessValidationFailed) {
+    return <AccessLanding email={session.data?.user.email} state="error" message="A sessão está autenticada, mas o portal não conseguiu comprovar as permissões atuais. O acesso permanece bloqueado por segurança." activating={false} onActivate={()=>{}} onRetry={()=>void refreshAccessContext()} onSignOut={()=>void neon.auth.signOut()} />;
+  }
+
+  if (!hasAuthorizedSurface) {
+    return <AccessLanding email={session.data?.user.email} state="pending" message={accessMessage} activating={activating} onActivate={()=>void claimAccess()} onRetry={()=>void refreshAccessContext()} onSignOut={()=>void neon.auth.signOut()} />;
+  }
 
   return (
     <div className="shell">
@@ -213,8 +245,7 @@ function Dashboard() {
         <section className="identity-strip">
           <div><small>USUÁRIO</small><strong>{session.data?.user.email}</strong></div>
           <div><small>ACESSO</small><strong>{accessMessage}</strong></div>
-          <div><small>MÓDULOS</small><strong>{navigationLoaded ? `${visibleNavItems.length} visível(is)` : 'Carregando…'}</strong></div>
-          {!organizations.length && <button className="primary compact" onClick={() => void claimAccess()} disabled={activating}>{activating ? 'Ativando…' : 'Ativar convite'}</button>}
+          <div><small>MÓDULOS</small><strong>{visibleNavItems.length} visível(is)</strong></div>
         </section>
 
         <div className="route-page" data-route={effectiveRoute}>
