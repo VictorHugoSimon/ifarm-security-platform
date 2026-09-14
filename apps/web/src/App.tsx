@@ -55,6 +55,7 @@ const navItems = [
 
 type RouteKey = typeof navItems[number]['key'];
 type Organization = { id: string; name: string; status: string };
+type NavigationRow = { module_key: string };
 
 const validRoutes = new Set<RouteKey>(navItems.map((item) => item.key));
 
@@ -78,7 +79,7 @@ function Overview() {
         <div className="grid">{modules.map(([title, text]) => <article className="module" key={title}><h3>{title}</h3><p>{text}</p></article>)}</div>
       </section>
 
-      <section className="notice"><strong>Operations by Design</strong><p>O painel operacional agrega sinais técnicos e ocorrências autorizadas. Ele não ativa, por si só, serviço humano 24×7 nem despacho de autoridade pública.</p></section>
+      <section className="notice"><strong>Access-Aware UX</strong><p>O menu reduz a superfície exibida conforme os acessos ativos. Isso é conveniência e minimização de superfície; RLS e validações server-side continuam sendo a autoridade de segurança.</p></section>
     </>
   );
 }
@@ -112,8 +113,12 @@ function Dashboard() {
   const [accessMessage, setAccessMessage] = useState('Carregando permissões…');
   const [activating, setActivating] = useState(false);
   const [route, setRoute] = useState<RouteKey>(() => routeFromHash());
+  const [allowedModules, setAllowedModules] = useState<Set<RouteKey>>(() => new Set<RouteKey>(['overview']));
+  const [navigationLoaded, setNavigationLoaded] = useState(false);
 
-  const currentNav = useMemo(() => navItems.find((item) => item.key === route) || navItems[0], [route]);
+  const effectiveRoute: RouteKey = navigationLoaded && allowedModules.has(route) ? route : 'overview';
+  const currentNav = useMemo(() => navItems.find((item) => item.key === effectiveRoute) || navItems[0], [effectiveRoute]);
+  const visibleNavItems = useMemo(() => navItems.filter((item) => allowedModules.has(item.key)), [allowedModules]);
 
   async function loadAccess() {
     const result = await neon.from('organizations').select('id,name,status');
@@ -126,23 +131,36 @@ function Dashboard() {
     setAccessMessage(rows.length ? `${rows.length} organização(ões) autorizada(s)` : 'Conta autenticada, mas sem acesso ativado.');
   }
 
+  async function loadNavigation() {
+    const result = await neon.rpc('get_my_navigation_modules');
+    const next = new Set<RouteKey>(['overview']);
+    if (!result.error) {
+      for (const row of (result.data || []) as NavigationRow[]) {
+        if (validRoutes.has(row.module_key as RouteKey)) next.add(row.module_key as RouteKey);
+      }
+    }
+    setAllowedModules(next);
+    setNavigationLoaded(true);
+  }
+
   async function claimAccess() {
     setActivating(true);
     try {
       const result = await neon.rpc('claim_my_invited_access');
       if (result.error) setAccessMessage('A ativação exige convite válido e e-mail verificado.');
-      else await loadAccess();
+      else await Promise.all([loadAccess(), loadNavigation()]);
     } finally {
       setActivating(false);
     }
   }
 
   function navigate(nextRoute: RouteKey) {
+    if (!allowedModules.has(nextRoute)) return;
     if (route === nextRoute && window.location.hash === `#/${nextRoute}`) return;
     window.location.hash = `/${nextRoute}`;
   }
 
-  useEffect(() => { void loadAccess(); }, []);
+  useEffect(() => { void Promise.all([loadAccess(), loadNavigation()]); }, []);
 
   useEffect(() => {
     const applyHash = () => setRoute(routeFromHash());
@@ -158,6 +176,12 @@ function Dashboard() {
   }, []);
 
   useEffect(() => {
+    if (!navigationLoaded || allowedModules.has(route)) return;
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/overview`);
+    setRoute('overview');
+  }, [navigationLoaded, allowedModules, route]);
+
+  useEffect(() => {
     document.title = `${currentNav.title} · iFarm Security`;
   }, [currentNav]);
 
@@ -166,12 +190,12 @@ function Dashboard() {
       <aside>
         <div className="brand">iFARM <strong>SECURITY</strong></div>
         <nav aria-label="Módulos iFarm Security">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <button
               type="button"
               key={item.key}
-              className={route === item.key ? 'active' : ''}
-              aria-current={route === item.key ? 'page' : undefined}
+              className={effectiveRoute === item.key ? 'active' : ''}
+              aria-current={effectiveRoute === item.key ? 'page' : undefined}
               onClick={() => navigate(item.key)}
             >
               {item.label}
@@ -189,11 +213,12 @@ function Dashboard() {
         <section className="identity-strip">
           <div><small>USUÁRIO</small><strong>{session.data?.user.email}</strong></div>
           <div><small>ACESSO</small><strong>{accessMessage}</strong></div>
+          <div><small>MÓDULOS</small><strong>{navigationLoaded ? `${visibleNavItems.length} visível(is)` : 'Carregando…'}</strong></div>
           {!organizations.length && <button className="primary compact" onClick={() => void claimAccess()} disabled={activating}>{activating ? 'Ativando…' : 'Ativar convite'}</button>}
         </section>
 
-        <div className="route-page" data-route={route}>
-          <RouteContent route={route} />
+        <div className="route-page" data-route={effectiveRoute}>
+          <RouteContent route={effectiveRoute} />
         </div>
       </main>
     </div>
