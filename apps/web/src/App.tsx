@@ -11,6 +11,7 @@ import { IncidentCenter } from './IncidentCenter';
 import { InsuranceCenter } from './InsuranceCenter';
 import { MembershipManagement } from './MembershipManagement';
 import { OperationsSOC } from './OperationsSOC';
+import { PilotCenter } from './PilotCenter';
 import { PrivacyRetentionCenter } from './PrivacyRetentionCenter';
 import { RuralStructure } from './RuralStructure';
 import { SecurityMap } from './SecurityMap';
@@ -27,12 +28,14 @@ const modules = [
   ['Security + Insurance', 'Apólices, cotação, renovação e sinistro via parceiros habilitados'],
   ['Community', 'Participantes, pontos comunitários, rotas autorizadas e manutenção do bairro'],
   ['Suporte', 'Chamados técnicos, manutenção e metas operacionais não contratuais'],
-  ['Privacidade', 'Solicitações LGPD e políticas de retenção sem exclusão automática']
+  ['Privacidade', 'Solicitações LGPD e políticas de retenção sem exclusão automática'],
+  ['Piloto', 'Readiness, observabilidade e métricas separadas entre sistema e medição manual']
 ];
 
 const navItems = [
   { key: 'overview', label: 'Visão Geral', title: 'Visão Geral' },
   { key: 'operations', label: 'Operações', title: 'Operations / SOC' },
+  { key: 'pilot', label: 'Piloto', title: 'Pilot Readiness & Observability' },
   { key: 'sos', label: 'SOS', title: 'iFarm SOS' },
   { key: 'assets', label: 'Ativos', title: 'Asset Security' },
   { key: 'insurance', label: 'Insurance', title: 'Security + Insurance' },
@@ -83,6 +86,7 @@ function Overview() {
 function RouteContent({ route }: { route: RouteKey }) {
   switch (route) {
     case 'operations': return <OperationsSOC />;
+    case 'pilot': return <PilotCenter />;
     case 'sos': return <SOSCenter />;
     case 'assets': return <AssetSecurity />;
     case 'insurance': return <InsuranceCenter />;
