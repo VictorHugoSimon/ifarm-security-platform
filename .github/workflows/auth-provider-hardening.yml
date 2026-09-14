@@ -1,0 +1,88 @@
+name: Harden iFarm Security Auth
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Environment to harden
+        required: true
+        type: choice
+        options:
+          - dev
+          - stage
+      stage_origin:
+        description: Real approved HTTPS STAGE origin; required only for stage
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ifarm-security-auth-hardening-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  harden-auth:
+    if: github.repository == 'VictorHugoSimon/ifarm-security-platform' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ifarm-security-${{ inputs.target }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require private repository
+        shell: bash
+        run: |
+          if [ "${{ github.event.repository.visibility }}" != "private" ]; then
+            echo "::error::Repository must be private before injecting a dedicated Neon API credential. No Neon API call was made."
+            exit 1
+          fi
+
+      - name: Require isolated Neon credential
+        env:
+          IFARM_SECURITY_NEON_API_KEY: ${{ secrets.IFARM_SECURITY_NEON_API_KEY }}
+        shell: bash
+        run: |
+          if [ -z "$IFARM_SECURITY_NEON_API_KEY" ]; then
+            echo "::error::Missing dedicated secret IFARM_SECURITY_NEON_API_KEY. No Neon API call was made."
+            exit 1
+          fi
+
+      - name: Validate STAGE origin input
+        if: inputs.target == 'stage'
+        env:
+          STAGE_ORIGIN: ${{ inputs.stage_origin }}
+        shell: bash
+        run: |
+          if ! [[ "$STAGE_ORIGIN" =~ ^https://[^/]+$ ]]; then
+            echo "::error::STAGE requires a real HTTPS origin without path or trailing slash."
+            exit 1
+          fi
+          if [[ "$STAGE_ORIGIN" == *localhost* || "$STAGE_ORIGIN" == *127.0.0.1* ]]; then
+            echo "::error::Localhost is forbidden as STAGE origin."
+            exit 1
+          fi
+
+      - name: Harden Managed Better Auth
+        env:
+          IFARM_SECURITY_NEON_API_KEY: ${{ secrets.IFARM_SECURITY_NEON_API_KEY }}
+          STAGE_ORIGIN: ${{ inputs.stage_origin }}
+        shell: bash
+        run: bash scripts/auth-provider-hardening.sh "${{ inputs.target }}" "$STAGE_ORIGIN"
+
+      - name: Record provider contract
+        shell: bash
+        run: |
+          echo "### iFarm Security Auth hardening" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Environment: ${{ inputs.target }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Public sign-up: disabled" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Email verification: required" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Verification method: OTP" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ inputs.target }}" = "stage" ]; then
+            echo "- Localhost: disabled" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Trusted origin: supplied approved STAGE origin" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Localhost: retained for DEV only" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "- MFA: NOT claimed; Managed Better Auth MFA remains unsupported by provider as of 2026-09-14" >> "$GITHUB_STEP_SUMMARY"
