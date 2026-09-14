@@ -47,6 +47,8 @@ jobs:
         run: pnpm navigation:check
       - name: Access-aware navigation invariants
         run: pnpm access-navigation:check
+      - name: Access landing invariants
+        run: pnpm access-landing:check
       - name: Support maintenance invariants
         run: pnpm support:check
       - name: Privacy retention invariants

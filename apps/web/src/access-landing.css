@@ -1,0 +1,8 @@
+.access-landing-shell{min-height:100vh;display:grid;place-items:center;padding:32px;background:linear-gradient(180deg,#0b1117 0%,#111a24 100%)}
+.access-landing-card{width:min(720px,100%);background:#101922;border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:32px;box-shadow:0 24px 70px rgba(0,0,0,.28)}
+.access-landing-brand{margin-bottom:28px}.access-landing-card h1{margin:8px 0 12px;font-size:clamp(28px,5vw,44px)}.access-landing-card>p{max-width:62ch;color:#b9c5d1;line-height:1.6}
+.access-landing-identity,.access-landing-note{margin-top:22px;padding:16px;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(255,255,255,.035)}
+.access-landing-identity{display:grid;gap:6px}.access-landing-identity small{color:#91a2b5}.access-landing-identity strong{word-break:break-all}
+.access-landing-note strong{display:block;margin-bottom:6px}.access-landing-note p{margin:0;color:#aebcca;line-height:1.55}
+.access-landing-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}.access-landing-foot{display:block;margin-top:22px;color:#7f91a4;line-height:1.5}
+@media(max-width:640px){.access-landing-shell{padding:18px}.access-landing-card{padding:22px}.access-landing-actions button{width:100%}}

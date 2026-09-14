@@ -25,6 +25,7 @@ requireInvariant(rootPackage.scripts?.['memberships:check'] === 'node scripts/me
 requireInvariant(rootPackage.scripts?.['access-audit:check'] === 'node scripts/access-audit-check.mjs', 'access audit security gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['navigation:check'] === 'node scripts/navigation-check.mjs', 'navigation gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['access-navigation:check'] === 'node scripts/access-aware-navigation-check.mjs', 'access-aware navigation gate must remain registered.');
+requireInvariant(rootPackage.scripts?.['access-landing:check'] === 'node scripts/access-landing-check.mjs', 'access landing gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['support:check'] === 'node scripts/support-maintenance-check.mjs', 'support/maintenance gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['privacy:check'] === 'node scripts/privacy-retention-check.mjs', 'privacy/retention gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['pilot:check'] === 'node scripts/pilot-readiness-check.mjs', 'pilot readiness gate must remain registered.');
@@ -67,6 +68,7 @@ for (const expected of [
   'pnpm access-audit:check',
   'pnpm navigation:check',
   'pnpm access-navigation:check',
+  'pnpm access-landing:check',
   'pnpm support:check',
   'pnpm privacy:check',
   'pnpm pilot:check',
@@ -92,4 +94,4 @@ requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_API_TOKEN'), 'gener
 requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_ACCOUNT_ID'), 'generic CLOUDFLARE_ACCOUNT_ID secret name is forbidden; use the iFarm Security dedicated secret.');
 requireInvariant(!/(?:DATABASE_URL|POSTGRES_URL|NEON_API_KEY|NEON_DATABASE_URL)/.test(stageWorkflow), 'STAGE deploy workflow must not receive privileged database credentials.');
 
-console.log('Deploy readiness check passed: private-repo gate, isolated Cloudflare credentials, access lifecycle/audit/navigation/access-aware-navigation/support/privacy/pilot gates, HTTP security artifact, pinned Wrangler, Pages contract and smoke gate preserved.');
+console.log('Deploy readiness check passed: private-repo gate, isolated Cloudflare credentials, access lifecycle/audit/navigation/access-aware-navigation/access-landing/support/privacy/pilot gates, HTTP security artifact, pinned Wrangler, Pages contract and smoke gate preserved.');

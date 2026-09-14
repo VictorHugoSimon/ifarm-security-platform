@@ -8,6 +8,7 @@ import './access-audit.css';
 import './support-center.css';
 import './privacy-retention.css';
 import './pilot-center.css';
+import './access-landing.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode><App /></React.StrictMode>
