@@ -6,6 +6,7 @@ const baseEnv = { APP_ENV: 'test', APP_NAME: 'iFarm Security' };
 const fakeDbEnv = { ...baseEnv, DATABASE_URL: 'postgresql://placeholder.invalid/ifarm_security' };
 const validId = '11111111-1111-4111-8111-111111111111';
 const validDeviceKey = `Device ${'x'.repeat(32)}`;
+const successLimiter = { limit: async (_options: { key: string }) => ({ success: true }) };
 
 async function json(response: Response) { return response.json() as Promise<Record<string, unknown>>; }
 
@@ -45,6 +46,28 @@ test('ready fails closed when database is not configured', async () => {
   assert.equal(body.ready, false);
   assert.equal(body.databaseConfigured, false);
   assert.equal(body.reason, 'database_not_configured');
+});
+
+test('STAGE readiness fails closed when distributed limiter bindings are absent', async () => {
+  const response = await app.request('/ready', {}, { ...fakeDbEnv, APP_ENV: 'stage' });
+  assert.equal(response.status, 503);
+  const body = await json(response);
+  assert.equal(body.ready, false);
+  assert.equal(body.databaseConfigured, true);
+  assert.equal(body.distributedRateLimitingConfigured, false);
+  assert.equal(body.reason, 'rate_limiter_not_configured');
+});
+
+test('system status reports rate limiting only when both bindings exist', async () => {
+  const disabled = await app.request('/api/v1/system/status', {}, baseEnv);
+  assert.equal((await json(disabled)).distributedRateLimitingConfigured, false);
+
+  const enabled = await app.request('/api/v1/system/status', {}, {
+    ...baseEnv,
+    INGEST_ACTOR_RATE_LIMITER: successLimiter,
+    INGEST_ROUTE_ABUSE_GUARD: successLimiter
+  });
+  assert.equal((await json(enabled)).distributedRateLimitingConfigured, true);
 });
 
 test('system status keeps sensitive integrations disabled', async () => {
@@ -87,7 +110,60 @@ test('heartbeat rejects invalid device id before database access', async () => {
   assert.deepEqual(await json(response), { error: 'invalid_device_id' });
 });
 
-test('heartbeat rejects oversized declared payload before authentication/database access', async () => {
+test('route abuse guard returns 429 before credential and database processing', async () => {
+  const routeLimiter = { limit: async (_options: { key: string }) => ({ success: false }) };
+  const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, { method: 'POST' }, {
+    ...fakeDbEnv,
+    INGEST_ACTOR_RATE_LIMITER: successLimiter,
+    INGEST_ROUTE_ABUSE_GUARD: routeLimiter
+  });
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get('retry-after'), '60');
+  const body = await json(response);
+  assert.equal(body.error, 'rate_limited');
+  assert.match(String(body.requestId || ''), /^[0-9a-f-]{36}$/i);
+});
+
+test('actor rate limiter uses a SHA-256 derived key and never raw credential material', async () => {
+  let actorKey = '';
+  const actorLimiter = { limit: async (options: { key: string }) => { actorKey = options.key; return { success: true }; } };
+  const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, {
+    method: 'POST',
+    headers: { authorization: validDeviceKey, 'content-type': 'text/plain' },
+    body: '{}'
+  }, {
+    ...fakeDbEnv,
+    INGEST_ACTOR_RATE_LIMITER: actorLimiter,
+    INGEST_ROUTE_ABUSE_GUARD: successLimiter
+  });
+  assert.equal(response.status, 415);
+  assert.match(actorKey, /^credential:device-heartbeat:[0-9a-f]{64}$/);
+  assert.ok(!actorKey.includes('x'.repeat(16)));
+});
+
+test('actor limiter returns 429 before payload and database processing', async () => {
+  const actorLimiter = { limit: async (_options: { key: string }) => ({ success: false }) };
+  const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, {
+    method: 'POST', headers: { authorization: validDeviceKey }
+  }, {
+    ...fakeDbEnv,
+    INGEST_ACTOR_RATE_LIMITER: actorLimiter,
+    INGEST_ROUTE_ABUSE_GUARD: successLimiter
+  });
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get('retry-after'), '60');
+  assert.equal((await json(response)).error, 'rate_limited');
+});
+
+test('STAGE ingest fails closed when distributed limiter bindings are absent', async () => {
+  const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, {
+    method: 'POST', headers: { authorization: validDeviceKey }
+  }, { ...fakeDbEnv, APP_ENV: 'stage' });
+  assert.equal(response.status, 503);
+  assert.equal((await json(response)).error, 'rate_limiter_not_configured');
+});
+
+test('heartbeat rejects oversized declared payload before database access', async () => {
   const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, { method: 'POST', headers: { authorization: validDeviceKey, 'content-type': 'application/json', 'content-length': '32769' }, body: '{}' }, fakeDbEnv);
   assert.equal(response.status, 413);
   assert.deepEqual(await json(response), { error: 'payload_too_large' });
