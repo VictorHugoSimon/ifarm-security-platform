@@ -43,7 +43,8 @@ function applySecurityHeaders(c: { header: (name: string, value: string) => void
 }
 
 async function readJsonBodyWithLimit<T>(c: { req: { header: (name: string) => string | undefined; text: () => Promise<string> } }): Promise<JsonBodyResult<T>> {
-  const mediaType = (c.req.header('content-type') || '').split(';', 1)[0].trim().toLowerCase();
+  const contentType = c.req.header('content-type') || '';
+  const mediaType = (contentType.split(';', 1)[0] ?? '').trim().toLowerCase();
   if (mediaType !== 'application/json') return { ok: false, status: 415, error: 'unsupported_media_type' };
 
   const contentLengthHeader = c.req.header('content-length');
@@ -70,18 +71,20 @@ app.use('*', async (c, next) => {
   const requestId = requestIdFromHeader(c.req.header('x-request-id'));
   const startedAt = Date.now();
   const pathname = new URL(c.req.url).pathname;
+  let explicitStatus: number | undefined;
   c.set('requestId', requestId);
   c.header('x-request-id', requestId);
   applySecurityHeaders(c);
   try {
     const allowedMethod = expectedMethod(pathname);
     if (allowedMethod && c.req.method !== allowedMethod) {
+      explicitStatus = 405;
       c.header('allow', allowedMethod);
       return c.json({ error: 'method_not_allowed', requestId }, 405);
     }
     await next();
   } finally {
-    structuredLog('info', 'http_request', { requestId, environment: c.env.APP_ENV, method: c.req.method, path: pathname, status: c.res.status, durationMs: Date.now() - startedAt });
+    structuredLog('info', 'http_request', { requestId, environment: c.env.APP_ENV, method: c.req.method, path: pathname, status: explicitStatus ?? c.res.status, durationMs: Date.now() - startedAt });
   }
 });
 
