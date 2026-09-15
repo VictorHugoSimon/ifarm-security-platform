@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "provider": "neon",
+  "projectId": "restless-cell-49791922",
+  "current": {
+    "subscription": "free_v3",
+    "historyRetentionSeconds": 21600,
+    "automaticSnapshotScheduleAvailable": false,
+    "manualSnapshotNonRootBranchesSupported": false,
+    "devSnapshotSchedule": [],
+    "stageSnapshotSchedule": [],
+    "prodSnapshotSchedule": []
+  },
+  "pilotTargets": {
+    "rpoHours": 24,
+    "rtoHours": 8,
+    "contractual": false,
+    "status": "provisional"
+  },
+  "productionGate": {
+    "realUsersAllowed": false,
+    "requires": [
+      "backup_schedule_enabled",
+      "restore_drill_passed",
+      "rpo_rto_approved",
+      "auth_provider_hardened",
+      "repository_private"
+    ]
+  }
+}
