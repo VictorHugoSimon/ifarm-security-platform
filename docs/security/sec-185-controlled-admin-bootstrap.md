@@ -22,57 +22,50 @@ O portal **não** oferece botão, RPC ou endpoint para promover `admin_ifarm`.
 1. Criar/identificar a identidade exclusivamente no Neon Auth da branch correta.
 2. Confirmar, antes da promoção:
    - `auth_user_id` exato;
-   - e-mail esperado exato;
+   - e-mail esperado;
    - `emailVerified=true`;
    - `banned=false`.
-3. Confirmar que ainda não existe outro usuário verificado e não banido com papel `admin_ifarm`.
-4. Promover **somente pelo control plane oficial do Neon Auth** (MCP/CLI/API), por exemplo:
-   `neon neon-auth user set-role <auth-user-id> --roles admin_ifarm --branch <branch> --project-id restless-cell-49791922`
-5. Executar, como proprietário do banco e nunca como papel do portal:
-   `SELECT public.app_finalize_first_platform_admin_bootstrap('<auth-user-id>', '<expected-email>', '<reason>');`
-6. Validar o evento `platform_admin.bootstrap.completed` no `audit_logs`.
-7. Validar login, `app_is_platform_admin()` e navegação de Admin iFarm.
+3. Promover **somente pelo control plane oficial do Neon Auth** (MCP/CLI/API) para `admin_ifarm`.
+4. O usuário entra normalmente pelo portal. `AuthGate` bloqueia qualquer identidade não verificada.
+5. No primeiro fluxo administrativo que exigir materialização do usuário, `app_ensure_platform_user()`:
+   - revalida `app_is_platform_admin()`;
+   - verifica o e-mail novamente;
+   - cria/atualiza `app_users` com `mfa_required=true`.
+6. `create_organization()` já chama `app_ensure_platform_user()` antes de criar o primeiro tenant e registra a criação no audit log.
 
-## Finalizador owner-only
-`app_finalize_first_platform_admin_bootstrap()` **não concede** o papel `admin_ifarm`. Ele somente:
-- vincula o `auth_user_id` ao e-mail esperado;
-- exige e-mail verificado;
-- exige identidade não banida;
-- exige que o papel já tenha sido concedido no Neon Auth;
-- exige que exista exatamente um primeiro Admin iFarm elegível;
-- cria/ativa o registro em `app_users`;
-- grava o evento de auditoria;
-- impede segunda finalização após o bootstrap registrado.
+Não existe função especial de bootstrap executável pelo browser e não existe `admin_ifarm` por convite.
 
-Permissões:
-- `PUBLIC`: sem EXECUTE;
-- `anonymous`: sem EXECUTE;
-- `authenticated`: sem EXECUTE;
-- uso exclusivo do owner/control plane operacional.
+## Migration 0026
+`0026_controlled_admin_bootstrap.sql` endurece `app_is_platform_admin()` para exigir, simultaneamente:
+- role `admin_ifarm` no Neon Auth;
+- e-mail verificado;
+- identidade não banida.
+
+Permissões do helper:
+- `PUBLIC`: revogado;
+- `anonymous`: revogado;
+- `authenticated`: EXECUTE apenas para avaliar a sessão autenticada.
 
 ## MFA
-`app_users.mfa_required=true` permanece como requisito de produto. Em 2026-09-15, MFA para usuários finais continua indisponível no Managed Better Auth segundo o roadmap oficial já registrado na SEC-184. Isso é bloqueio de produção e não deve ser apresentado como implementado.
+`app_users.mfa_required=true` permanece como requisito de produto. Em 2026-09-15, MFA para usuários finais continua indisponível no Managed Better Auth segundo o roadmap oficial registrado na SEC-184. Isso é bloqueio de produção e não deve ser apresentado como implementado.
 
-## QA executado
+## QA planejado
 ### DEV
-- migration `0026_controlled_admin_bootstrap.sql` aplicada;
-- `authenticated` executa `app_is_platform_admin()`;
-- `anonymous` não executa `app_is_platform_admin()`;
-- `authenticated` e `anonymous` não executam o finalizador;
-- sem sessão, `app_is_platform_admin() = false`;
-- `admin_ifarm_total = 0` e `eligible_admin_ifarm = 0`.
+- aplicar `0026`;
+- confirmar `authenticated=true` e `anonymous=false` para EXECUTE em `app_is_platform_admin()`;
+- confirmar sem sessão `app_is_platform_admin() = false`;
+- confirmar zero `admin_ifarm` elegíveis.
 
 ### STAGE
-- mesma migration aplicada após DEV;
-- privilégios do finalizador confirmados como owner-only;
-- usuário QA `qa-admin-org@ifarm-security.test` recebeu temporariamente `admin_ifarm` via control plane oficial;
-- esse usuário permaneceu com `emailVerified=false`;
-- sob JWT QA autenticado, `app_is_platform_admin() = false`;
-- o finalizador rejeitou a identidade com `verified_email_required`;
-- o papel foi imediatamente restaurado para `user`;
-- estado final: `admin_ifarm_total = 0`, `eligible_admin_ifarm = 0`, `bootstrap_audit_rows = 0`.
+- aplicar a mesma migration após DEV;
+- usar apenas um usuário QA sintético existente;
+- promover temporariamente esse QA para `admin_ifarm` pelo control plane oficial;
+- manter `emailVerified=false`;
+- provar que `app_is_platform_admin() = false` mesmo com o papel;
+- restaurar imediatamente o papel para `user`;
+- confirmar zero admins elegíveis ao final e nenhuma alteração de tenant/membership.
 
-O teste comprova que possuir apenas o papel `admin_ifarm` não é suficiente para obter autoridade de plataforma.
+O teste negativo comprova que possuir somente o papel `admin_ifarm` não é suficiente para obter autoridade de plataforma.
 
 ## Primeiro Admin real
 Não criar o primeiro Admin iFarm real até existir uma identidade real explicitamente escolhida e verificada. Não inferir e-mail pessoal, não reutilizar usuário de outro projeto e não promover usuário QA.
