@@ -90,11 +90,39 @@ O log não contém chave bruta nem `key_hash`.
 Em 2026-09-15:
 - DEV: 0 chaves cadastradas;
 - STAGE: 1 chave QA ativa (`QA-SEC191 default-90`) com validade de 90 dias;
-- DEV/STAGE já possuem `expires_at NOT NULL` e a versão endurecida de `register_device_ingest_key()` validada durante o trabalho anterior;
+- DEV/STAGE já possuíam `expires_at NOT NULL` e a versão endurecida de `register_device_ingest_key()` validada durante o trabalho anterior;
 - a `main` ainda não continha essa migration consolidada;
 - foi identificado um bug live: `list_device_ingest_keys()` era `SECURITY INVOKER` enquanto `authenticated` não possui SELECT na tabela, causando `permission denied for table device_ingest_keys` após passar pelo escopo.
 
 A SEC-192 corrige esse desalinhamento e passa a ser a migration canônica do lifecycle de credenciais.
+
+## Validação executada — 2026-09-15
+
+### CI
+- CI #73: 100% verde;
+- migration inventory, RBAC, privilege hardening, Auth, API perimeter, device-key lifecycle, deploy-readiness, testes, typecheck e build passaram.
+
+### DEV
+- migration consolidada aplicada em transação;
+- `expires_at NOT NULL`: confirmado;
+- `rotated_from_key_id`: presente;
+- índice de sucessora única: presente;
+- `list_device_ingest_keys()` = `SECURITY DEFINER`;
+- `authenticated` continua sem SELECT direto na tabela;
+- `authenticated` possui EXECUTE em list/rotate;
+- `anonymous` não possui EXECUTE em list/rotate;
+- DEV permanece com 0 chaves cadastradas.
+
+### STAGE
+- mesma migration aplicada após DEV;
+- estrutura/privilégios equivalentes ao DEV confirmados;
+- Owner A foi reconhecido por `app_can_manage_device()` na câmera privada A;
+- antes da correção, a listagem reproduziu `permission denied for table device_ingest_keys`;
+- depois da correção, o mesmo Owner A listou com sucesso a chave `QA-SEC191 default-90` sem receber hash ou chave bruta;
+- a tentativa de executar o smoke de rotação pela ferramenta desta sessão foi bloqueada pela camada de segurança antes de qualquer chamada ao banco, por envolver criação/rotação de credencial;
+- leitura pós-bloqueio confirmou que nenhuma sucessora foi criada e a chave QA original permaneceu inalterada.
+
+O bloqueio do smoke de rotação é limitação da ferramenta de execução desta sessão, não evidência de falha da RPC. A rotação permanece coberta pelos invariantes de CI e pelo contrato do banco, devendo receber smoke operacional pelo portal/ambiente autorizado antes do piloto real.
 
 ## Critérios de aceite
 
@@ -110,3 +138,5 @@ A SEC-192 corrige esse desalinhamento e passa a ser a migration canônica do lif
 10. hash e chave bruta não aparecem na listagem/auditoria;
 11. DEV é validado antes de STAGE;
 12. PROD não é alterado.
+
+Critérios 3–8 relativos ao write-smoke de rotação devem ser reexecutados em ambiente operacional autorizado quando a rotação de credenciais puder ser acionada fora desta ferramenta.
