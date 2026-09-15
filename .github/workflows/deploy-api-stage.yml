@@ -23,17 +23,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.0.0
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-
       - name: Require private repository
         shell: bash
         run: |
@@ -41,10 +38,8 @@ jobs:
             echo "::error::iFarm Security repository must be private before API Worker deployment. No Cloudflare or Neon secret was read by this step."
             exit 1
           fi
-
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
-
       - name: API STAGE security gates
         run: |
           pnpm security:check
@@ -59,16 +54,14 @@ jobs:
           pnpm evidence-storage:check
           pnpm alert-delivery:check
           pnpm api-stage:check
-
+          pnpm device-keys:check
       - name: Test and typecheck API
         run: |
           pnpm --filter @ifarm-security/api test
           pnpm --filter @ifarm-security/api typecheck
-
       - name: Dry-run STAGE Worker bundle
         shell: bash
         run: npx --yes wrangler@4.130.0 deploy --config apps/api/wrangler.stage.toml --dry-run --outdir "$RUNNER_TEMP/ifarm-security-api-stage"
-
       - name: Require isolated deployment credentials
         env:
           CF_API_TOKEN: ${{ secrets.IFARM_SECURITY_CLOUDFLARE_API_TOKEN }}
@@ -76,19 +69,9 @@ jobs:
           STAGE_DATABASE_URL: ${{ secrets.IFARM_SECURITY_STAGE_DATABASE_URL }}
         shell: bash
         run: |
-          if [ -z "$CF_API_TOKEN" ] || [ -z "$CF_ACCOUNT_ID" ]; then
-            echo "::error::Missing dedicated iFarm Security Cloudflare credentials."
-            exit 1
-          fi
-          if [ -z "$STAGE_DATABASE_URL" ]; then
-            echo "::error::Missing dedicated IFARM_SECURITY_STAGE_DATABASE_URL."
-            exit 1
-          fi
-          if [[ ! "$STAGE_DATABASE_URL" =~ ^postgres(ql)?:// ]] || [[ "$STAGE_DATABASE_URL" != *".neon.tech/ifarm_security"* ]]; then
-            echo "::error::STAGE database secret does not match the expected Neon/PostgreSQL shape for ifarm_security."
-            exit 1
-          fi
-
+          if [ -z "$CF_API_TOKEN" ] || [ -z "$CF_ACCOUNT_ID" ]; then echo "::error::Missing dedicated iFarm Security Cloudflare credentials."; exit 1; fi
+          if [ -z "$STAGE_DATABASE_URL" ]; then echo "::error::Missing dedicated IFARM_SECURITY_STAGE_DATABASE_URL."; exit 1; fi
+          if [[ ! "$STAGE_DATABASE_URL" =~ ^postgres(ql)?:// ]] || [[ "$STAGE_DATABASE_URL" != *".neon.tech/ifarm_security"* ]]; then echo "::error::STAGE database secret does not match the expected Neon/PostgreSQL shape for ifarm_security."; exit 1; fi
       - name: Deploy isolated API Worker
         id: deploy_api
         env:
@@ -104,12 +87,8 @@ jobs:
           printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > "$SECRET_FILE"
           DEPLOY_OUTPUT="$(npx --yes wrangler@4.130.0 deploy --config apps/api/wrangler.stage.toml --secrets-file "$SECRET_FILE" --strict 2>&1)"
           API_URL="$(printf '%s\n' "$DEPLOY_OUTPUT" | grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' | tail -1 || true)"
-          if [ -z "$API_URL" ]; then
-            echo "::error::Worker deploy completed without a workers.dev URL in Wrangler output."
-            exit 1
-          fi
+          if [ -z "$API_URL" ]; then echo "::error::Worker deploy completed without a workers.dev URL in Wrangler output."; exit 1; fi
           echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
-
       - name: API smoke
         env:
           API_URL: ${{ steps.deploy_api.outputs.api_url }}
