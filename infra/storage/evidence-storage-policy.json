@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "databaseMetadataProvider": "neon",
+  "objectStorage": {
+    "configured": false,
+    "neonBranchableStorageAvailableInRegion": false,
+    "candidateProvider": "cloudflare_r2",
+    "bucketProvisioned": false,
+    "bucketPublic": false,
+    "directBrowserCredentialsAllowed": false,
+    "signedUrlMaxSeconds": 900,
+    "deleteEnabled": false,
+    "publicListingAllowed": false
+  },
+  "evidenceControls": {
+    "opaqueStorageKeyRequired": true,
+    "sha256Required": true,
+    "legalHoldMustBlockDeletion": true,
+    "retentionMustBeCheckedBeforeDeletion": true,
+    "downloadRequiresApprovedExport": true
+  },
+  "productionGate": {
+    "evidenceUploadAllowed": false,
+    "evidenceDownloadAllowed": false,
+    "requires": [
+      "private_bucket_provisioned",
+      "server_only_credentials",
+      "signed_url_flow_tested",
+      "tenant_key_isolation_tested",
+      "retention_legal_hold_enforced",
+      "storage_backup_restore_defined"
+    ]
+  }
+}
