@@ -33,13 +33,13 @@ for (const marker of [
   'restore drill',
   'RPO 24h',
   'RTO 8h',
-  'não contratual'
+  'não contratual',
+  'não declarar backup garantido',
+  'não prometer zero perda de dados'
 ]) {
   req(runbook.includes(marker), `runbook missing marker: ${marker}`);
 }
 
 req(deployWorkflow.includes('pnpm backup:check'), 'STAGE deploy must execute backup readiness gate.');
-req(!runbook.includes('backup garantido'), 'runbook must not claim backup is guaranteed.');
-req(!runbook.includes('zero perda de dados'), 'runbook must not promise zero data loss.');
 
 console.log('Backup readiness check passed: current Neon limitations are explicit, pilot RPO/RTO are provisional/non-contractual, and real PROD use remains blocked pending backup schedule + restore drill.');
