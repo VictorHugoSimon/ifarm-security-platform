@@ -82,6 +82,7 @@ jobs:
           pnpm backup:check
           pnpm evidence-storage:check
           pnpm alert-delivery:check
+          pnpm device-keys:check
           pnpm deploy:check
 
       - name: Install dependencies

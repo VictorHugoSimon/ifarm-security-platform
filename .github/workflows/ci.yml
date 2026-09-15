@@ -75,6 +75,8 @@ jobs:
         run: pnpm api-stage:check
       - name: API security perimeter invariants
         run: pnpm api-security:check
+      - name: Device key lifecycle invariants
+        run: pnpm device-keys:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies
