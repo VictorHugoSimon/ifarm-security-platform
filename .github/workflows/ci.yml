@@ -67,6 +67,8 @@ jobs:
         run: pnpm admin-lifecycle:check
       - name: Backup/restore readiness invariants
         run: pnpm backup:check
+      - name: Evidence storage readiness invariants
+        run: pnpm evidence-storage:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies
