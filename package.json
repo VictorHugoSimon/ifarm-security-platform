@@ -27,6 +27,7 @@
     "backup:check": "node scripts/backup-readiness-check.mjs",
     "evidence-storage:check": "node scripts/evidence-storage-readiness-check.mjs",
     "alert-delivery:check": "node scripts/alert-delivery-readiness-check.mjs",
+    "api-stage:check": "node scripts/api-stage-readiness-check.mjs",
     "deploy:check": "node scripts/deploy-readiness-check.mjs",
     "stage:smoke": "node scripts/stage-smoke.mjs",
     "test": "pnpm -r --if-present test",
