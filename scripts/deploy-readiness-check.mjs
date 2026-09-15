@@ -13,6 +13,7 @@ const robots = read('apps/web/public/robots.txt').trim();
 const stageEnv = read('apps/web/.env.stage.example');
 const cloudflareContract = read('infra/cloudflare/pages-stage.md');
 const stageWorkflow = read('.github/workflows/deploy-stage.yml');
+const apiStageWorkflow = read('.github/workflows/deploy-api-stage.yml');
 
 requireInvariant(rootPackage.scripts?.['deploy:check'] === 'node scripts/deploy-readiness-check.mjs', 'root deploy:check script must remain registered.');
 requireInvariant(rootPackage.scripts?.['invitations:check'] === 'node scripts/access-invitation-check.mjs', 'invitation security gate must remain registered.');
@@ -31,6 +32,7 @@ requireInvariant(rootPackage.scripts?.['admin-lifecycle:check'] === 'node script
 requireInvariant(rootPackage.scripts?.['backup:check'] === 'node scripts/backup-readiness-check.mjs', 'backup/restore readiness gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['evidence-storage:check'] === 'node scripts/evidence-storage-readiness-check.mjs', 'evidence storage readiness gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['alert-delivery:check'] === 'node scripts/alert-delivery-readiness-check.mjs', 'alert delivery readiness gate must remain registered.');
+requireInvariant(rootPackage.scripts?.['api-stage:check'] === 'node scripts/api-stage-readiness-check.mjs', 'API STAGE readiness gate must remain registered.');
 requireInvariant(webPackage.scripts?.build === 'tsc -b && vite build', 'web build contract changed unexpectedly.');
 requireInvariant(viteConfig.includes('defineConfig') && viteConfig.includes('react()'), 'web must remain a Vite React application.');
 requireInvariant(redirects === '/* /index.html 200', 'Cloudflare Pages SPA fallback must rewrite unknown paths to index.html with status 200.');
@@ -57,14 +59,34 @@ for (const expected of [
   'pnpm privileges:check','pnpm invitations:check','pnpm memberships:check','pnpm access-audit:check','pnpm navigation:check','pnpm access-navigation:check','pnpm access-landing:check','pnpm support:check','pnpm privacy:check','pnpm pilot:check','pnpm http-security:check','pnpm auth:check','pnpm auth-provider:check','pnpm admin-bootstrap:check','pnpm admin-lifecycle:check','pnpm backup:check','pnpm evidence-storage:check','pnpm alert-delivery:check',
   'test -f apps/web/dist/_headers','test -f apps/web/dist/robots.txt','cmp apps/web/public/_headers apps/web/dist/_headers','pnpm stage:smoke',
   "github.repository == 'VictorHugoSimon/ifarm-security-platform'","github.ref == 'refs/heads/main'",'${{ github.event.repository.visibility }}','iFarm Security repository must be private before any Cloudflare deployment'
-]) requireInvariant(stageWorkflow.includes(expected), `STAGE deploy workflow missing invariant: ${expected}`);
+]) requireInvariant(stageWorkflow.includes(expected), `STAGE Pages deploy workflow missing invariant: ${expected}`);
 
 const privateGatePosition = stageWorkflow.indexOf('- name: Require private repository');
 const credentialGatePosition = stageWorkflow.indexOf('- name: Require isolated Cloudflare credentials');
 const cloudflareCallPosition = stageWorkflow.indexOf('wrangler@4.130.0 pages project list');
-requireInvariant(privateGatePosition >= 0 && privateGatePosition < credentialGatePosition && credentialGatePosition < cloudflareCallPosition, 'repository privacy and dedicated credential gates must execute before every Cloudflare call.');
+requireInvariant(privateGatePosition >= 0 && privateGatePosition < credentialGatePosition && credentialGatePosition < cloudflareCallPosition, 'repository privacy and dedicated credential gates must execute before every Pages Cloudflare call.');
 requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_API_TOKEN'), 'generic CLOUDFLARE_API_TOKEN secret name is forbidden; use the iFarm Security dedicated secret.');
 requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_ACCOUNT_ID'), 'generic CLOUDFLARE_ACCOUNT_ID secret name is forbidden; use the iFarm Security dedicated secret.');
-requireInvariant(!/(?:DATABASE_URL|POSTGRES_URL|NEON_API_KEY|NEON_DATABASE_URL)/.test(stageWorkflow), 'STAGE deploy workflow must not receive privileged database credentials.');
+requireInvariant(!/(?:DATABASE_URL|POSTGRES_URL|NEON_API_KEY|NEON_DATABASE_URL)/.test(stageWorkflow), 'STAGE Pages workflow must not receive privileged database credentials.');
 
-console.log('Deploy readiness check passed: private-repo gate, isolated Cloudflare credentials, access lifecycle/audit/navigation/access-aware-navigation/access-landing/support/privacy/pilot/auth-provider/admin-bootstrap/admin-lifecycle/backup/evidence-storage/alert-delivery gates, HTTP security artifact, pinned Wrangler, Pages contract and smoke gate preserved.');
+for (const expected of [
+  'IFARM_SECURITY_API_STAGE_WORKER: ifarm-security-api-stage',
+  'secrets.IFARM_SECURITY_CLOUDFLARE_API_TOKEN',
+  'secrets.IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID',
+  'secrets.IFARM_SECURITY_STAGE_DATABASE_URL',
+  'pnpm api-stage:check',
+  '--config apps/api/wrangler.stage.toml',
+  '--secrets-file "$SECRET_FILE"',
+  'curl --fail --silent --show-error --max-time 20 "$API_URL/health"',
+  'curl --fail --silent --show-error --max-time 20 "$API_URL/ready"'
+]) requireInvariant(apiStageWorkflow.includes(expected), `STAGE API deploy workflow missing invariant: ${expected}`);
+const apiPrivateGate = apiStageWorkflow.indexOf('- name: Require private repository');
+const apiCredentialGate = apiStageWorkflow.indexOf('- name: Require isolated deployment credentials');
+const apiDeployStep = apiStageWorkflow.indexOf('- name: Deploy isolated API Worker');
+requireInvariant(apiPrivateGate >= 0 && apiPrivateGate < apiCredentialGate && apiCredentialGate < apiDeployStep, 'API repository privacy and dedicated credential gates must execute before Worker deployment.');
+requireInvariant(!apiStageWorkflow.includes('secrets.CLOUDFLARE_API_TOKEN'), 'generic Cloudflare token is forbidden in API workflow.');
+requireInvariant(!apiStageWorkflow.includes('secrets.CLOUDFLARE_ACCOUNT_ID'), 'generic Cloudflare account secret is forbidden in API workflow.');
+requireInvariant(!apiStageWorkflow.includes('secrets.DATABASE_URL'), 'generic database secret is forbidden in API workflow.');
+requireInvariant(!apiStageWorkflow.includes('ifarm-security-api-prod'), 'PROD API Worker must remain outside STAGE deploy workflow.');
+
+console.log('Deploy readiness check passed: Pages and API STAGE remain isolated behind private-repo, dedicated credentials, security/readiness gates and smoke checks.');
