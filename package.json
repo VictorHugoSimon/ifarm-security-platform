@@ -24,6 +24,7 @@
     "auth-provider:check": "node scripts/auth-provider-contract-check.mjs",
     "admin-bootstrap:check": "node scripts/admin-bootstrap-check.mjs",
     "admin-lifecycle:check": "node scripts/platform-admin-lifecycle-check.mjs",
+    "backup:check": "node scripts/backup-readiness-check.mjs",
     "deploy:check": "node scripts/deploy-readiness-check.mjs",
     "stage:smoke": "node scripts/stage-smoke.mjs",
     "test": "pnpm -r --if-present test",
