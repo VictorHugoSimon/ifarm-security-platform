@@ -1,11 +1,24 @@
 import { neon } from '@neondatabase/serverless';
 import { Hono } from 'hono';
 
-type Bindings = { APP_ENV: string; APP_NAME: string; DATABASE_URL?: string };
+type RateLimitBinding = { limit: (options: { key: string }) => Promise<{ success: boolean }> };
+type Bindings = {
+  APP_ENV: string;
+  APP_NAME: string;
+  DATABASE_URL?: string;
+  INGEST_ACTOR_RATE_LIMITER?: RateLimitBinding;
+  INGEST_ROUTE_ABUSE_GUARD?: RateLimitBinding;
+};
 type Variables = { requestId: string };
 type HeartbeatStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
 type HeartbeatBody = { eventId?: string; status?: HeartbeatStatus; sourceAt?: string; batteryPct?: number; signalRssi?: number; connectionType?: string; metadata?: Record<string, unknown> };
 type AssetPositionBody = { deviceId: string; eventId?: string; recordedAt?: string; latitude: number; longitude: number; speedKmh?: number; headingDegrees?: number; accuracyM?: number; metadata?: Record<string, unknown> };
+type RateLimitResult =
+  | { ok: true }
+  | { ok: false; status: 429 | 503; error: 'rate_limited' | 'rate_limiter_not_configured' | 'rate_limiter_unavailable'; retryAfterSeconds?: number };
+type ActorRateLimitResult =
+  | { ok: true; keyHash: string }
+  | { ok: false; status: 429 | 503; error: 'rate_limited' | 'rate_limiter_not_configured' | 'rate_limiter_unavailable'; retryAfterSeconds?: number };
 
 type JsonBodyResult<T> =
   | { ok: true; body: T }
@@ -14,6 +27,7 @@ type JsonBodyResult<T> =
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VALID_STATUS = new Set<HeartbeatStatus>(['online', 'offline', 'degraded', 'maintenance']);
 const MAX_INGEST_BODY_BYTES = 32768;
+const RATE_LIMIT_RETRY_SECONDS = 60;
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 function structuredLog(level: 'info' | 'warn' | 'error', event: string, fields: Record<string, unknown> = {}) {
@@ -99,22 +113,76 @@ async function sha256Hex(value: string) {
 }
 function deviceKeyFromAuthorization(value?: string) { if (!value?.startsWith('Device ')) return ''; return value.slice('Device '.length).trim(); }
 function validMetadata(value: unknown) { if (!value || Array.isArray(value) || typeof value !== 'object') return {}; return value as Record<string, unknown>; }
+function distributedRateLimitingConfigured(env: Bindings) { return Boolean(env.INGEST_ACTOR_RATE_LIMITER && env.INGEST_ROUTE_ABUSE_GUARD); }
+function requiresDistributedRateLimiting(env: Bindings) { return env.APP_ENV === 'stage' || env.APP_ENV === 'production'; }
+
+async function checkRouteAbuseGuard(env: Bindings, routeKey: string, requestId: string): Promise<RateLimitResult> {
+  const limiter = env.INGEST_ROUTE_ABUSE_GUARD;
+  if (!limiter) {
+    if (requiresDistributedRateLimiting(env)) {
+      structuredLog('error', 'ingest_rate_limiter_not_configured', { requestId, environment: env.APP_ENV, scope: 'route', routeKey });
+      return { ok: false, status: 503, error: 'rate_limiter_not_configured' };
+    }
+    return { ok: true };
+  }
+  try {
+    const { success } = await limiter.limit({ key: `route:${routeKey}` });
+    if (!success) {
+      structuredLog('warn', 'ingest_rate_limited', { requestId, environment: env.APP_ENV, scope: 'route', routeKey });
+      return { ok: false, status: 429, error: 'rate_limited', retryAfterSeconds: RATE_LIMIT_RETRY_SECONDS };
+    }
+    return { ok: true };
+  } catch {
+    structuredLog('error', 'ingest_rate_limiter_failed', { requestId, environment: env.APP_ENV, scope: 'route', routeKey });
+    return { ok: false, status: 503, error: 'rate_limiter_unavailable' };
+  }
+}
+
+async function checkActorRateLimit(env: Bindings, routeKey: string, rawKey: string, requestId: string): Promise<ActorRateLimitResult> {
+  const keyHash = await sha256Hex(rawKey);
+  const limiter = env.INGEST_ACTOR_RATE_LIMITER;
+  if (!limiter) {
+    if (requiresDistributedRateLimiting(env)) {
+      structuredLog('error', 'ingest_rate_limiter_not_configured', { requestId, environment: env.APP_ENV, scope: 'credential', routeKey });
+      return { ok: false, status: 503, error: 'rate_limiter_not_configured' };
+    }
+    return { ok: true, keyHash };
+  }
+  try {
+    const { success } = await limiter.limit({ key: `credential:${routeKey}:${keyHash}` });
+    if (!success) {
+      structuredLog('warn', 'ingest_rate_limited', { requestId, environment: env.APP_ENV, scope: 'credential', routeKey });
+      return { ok: false, status: 429, error: 'rate_limited', retryAfterSeconds: RATE_LIMIT_RETRY_SECONDS };
+    }
+    return { ok: true, keyHash };
+  } catch {
+    structuredLog('error', 'ingest_rate_limiter_failed', { requestId, environment: env.APP_ENV, scope: 'credential', routeKey });
+    return { ok: false, status: 503, error: 'rate_limiter_unavailable' };
+  }
+}
 
 app.get('/health', (c) => c.json({ ok: true, type: 'liveness', service: 'ifarm-security-api', environment: c.env.APP_ENV, timestamp: new Date().toISOString() }));
 app.get('/ready', async (c) => {
   const startedAt = Date.now();
   if (!c.env.DATABASE_URL) return c.json({ ready: false, databaseConfigured: false, reason: 'database_not_configured', timestamp: new Date().toISOString() }, 503);
-  try { const sql = neon(c.env.DATABASE_URL); await sql`select 1 as ready`; return c.json({ ready: true, databaseConfigured: true, databaseLatencyMs: Date.now() - startedAt, timestamp: new Date().toISOString() }); }
-  catch { structuredLog('error', 'readiness_database_failed', { requestId: c.get('requestId'), environment: c.env.APP_ENV }); return c.json({ ready: false, databaseConfigured: true, reason: 'database_unavailable', timestamp: new Date().toISOString() }, 503); }
+  if (requiresDistributedRateLimiting(c.env) && !distributedRateLimitingConfigured(c.env)) {
+    return c.json({ ready: false, databaseConfigured: true, distributedRateLimitingConfigured: false, reason: 'rate_limiter_not_configured', timestamp: new Date().toISOString() }, 503);
+  }
+  try { const sql = neon(c.env.DATABASE_URL); await sql`select 1 as ready`; return c.json({ ready: true, databaseConfigured: true, distributedRateLimitingConfigured: distributedRateLimitingConfigured(c.env), databaseLatencyMs: Date.now() - startedAt, timestamp: new Date().toISOString() }); }
+  catch { structuredLog('error', 'readiness_database_failed', { requestId: c.get('requestId'), environment: c.env.APP_ENV }); return c.json({ ready: false, databaseConfigured: true, distributedRateLimitingConfigured: distributedRateLimitingConfigured(c.env), reason: 'database_unavailable', timestamp: new Date().toISOString() }, 503); }
 });
-app.get('/api/v1/system/status', (c) => c.json({ product: c.env.APP_NAME, modules: ['identity', 'map', 'devices', 'telemetry', 'events', 'incidents', 'evidence', 'sos', 'asset-security', 'insurance', 'community', 'operations'], databaseConfigured: Boolean(c.env.DATABASE_URL), storageConfigured: false, distributedRateLimitingConfigured: false, humanMonitoringAssumed: false, publicDispatchEnabled: false, governmentIntegration: false, biometricMatching: false }));
+app.get('/api/v1/system/status', (c) => c.json({ product: c.env.APP_NAME, modules: ['identity', 'map', 'devices', 'telemetry', 'events', 'incidents', 'evidence', 'sos', 'asset-security', 'insurance', 'community', 'operations'], databaseConfigured: Boolean(c.env.DATABASE_URL), storageConfigured: false, distributedRateLimitingConfigured: distributedRateLimitingConfigured(c.env), humanMonitoringAssumed: false, publicDispatchEnabled: false, governmentIntegration: false, biometricMatching: false }));
 
 app.post('/api/v1/ingest/devices/:deviceId/heartbeat', async (c) => {
   if (!c.env.DATABASE_URL) return c.json({ error: 'service_not_configured' }, 503);
   const deviceId = c.req.param('deviceId');
   if (!UUID_PATTERN.test(deviceId)) return c.json({ error: 'invalid_device_id' }, 400);
+  const routeLimit = await checkRouteAbuseGuard(c.env, 'device-heartbeat', c.get('requestId'));
+  if (!routeLimit.ok) { if (routeLimit.retryAfterSeconds) c.header('retry-after', String(routeLimit.retryAfterSeconds)); return c.json({ error: routeLimit.error, requestId: c.get('requestId') }, routeLimit.status); }
   const rawKey = deviceKeyFromAuthorization(c.req.header('authorization'));
   if (rawKey.length < 32 || rawKey.length > 200) return c.json({ error: 'unauthorized' }, 401);
+  const actorLimit = await checkActorRateLimit(c.env, 'device-heartbeat', rawKey, c.get('requestId'));
+  if (!actorLimit.ok) { if (actorLimit.retryAfterSeconds) c.header('retry-after', String(actorLimit.retryAfterSeconds)); return c.json({ error: actorLimit.error, requestId: c.get('requestId') }, actorLimit.status); }
   const parsedBody = await readJsonBodyWithLimit<HeartbeatBody>(c);
   if (!parsedBody.ok) return c.json({ error: parsedBody.error }, parsedBody.status);
   const body = parsedBody.body;
@@ -129,8 +197,8 @@ app.post('/api/v1/ingest/devices/:deviceId/heartbeat', async (c) => {
   const metadataJson = JSON.stringify(validMetadata(body.metadata));
   if (new TextEncoder().encode(metadataJson).byteLength > 8192) return c.json({ error: 'metadata_too_large' }, 413);
   try {
-    const keyHash = await sha256Hex(rawKey); const sql = neon(c.env.DATABASE_URL);
-    const rows = await sql`select * from public.ingest_device_heartbeat(${deviceId}::uuid,${keyHash}::text,${body.eventId ?? null}::text,${status}::device_status,${sourceAt}::timestamptz,${body.batteryPct ?? null}::numeric,${body.signalRssi ?? null}::integer,${body.connectionType ?? null}::text,${metadataJson}::jsonb)`;
+    const sql = neon(c.env.DATABASE_URL);
+    const rows = await sql`select * from public.ingest_device_heartbeat(${deviceId}::uuid,${actorLimit.keyHash}::text,${body.eventId ?? null}::text,${status}::device_status,${sourceAt}::timestamptz,${body.batteryPct ?? null}::numeric,${body.signalRssi ?? null}::integer,${body.connectionType ?? null}::text,${metadataJson}::jsonb)`;
     const row = rows[0] as { accepted: boolean; current_status: string; received_at: string; transition: string } | undefined;
     if (!row) return c.json({ error: 'ingest_failed' }, 500);
     return c.json({ accepted: row.accepted, status: row.current_status, receivedAt: row.received_at, transition: row.transition }, 202);
@@ -146,8 +214,12 @@ app.post('/api/v1/ingest/assets/:assetId/position', async (c) => {
   if (!c.env.DATABASE_URL) return c.json({ error: 'service_not_configured' }, 503);
   const assetId = c.req.param('assetId');
   if (!UUID_PATTERN.test(assetId)) return c.json({ error: 'invalid_asset_id' }, 400);
+  const routeLimit = await checkRouteAbuseGuard(c.env, 'asset-position', c.get('requestId'));
+  if (!routeLimit.ok) { if (routeLimit.retryAfterSeconds) c.header('retry-after', String(routeLimit.retryAfterSeconds)); return c.json({ error: routeLimit.error, requestId: c.get('requestId') }, routeLimit.status); }
   const rawKey = deviceKeyFromAuthorization(c.req.header('authorization'));
   if (rawKey.length < 32 || rawKey.length > 200) return c.json({ error: 'unauthorized' }, 401);
+  const actorLimit = await checkActorRateLimit(c.env, 'asset-position', rawKey, c.get('requestId'));
+  if (!actorLimit.ok) { if (actorLimit.retryAfterSeconds) c.header('retry-after', String(actorLimit.retryAfterSeconds)); return c.json({ error: actorLimit.error, requestId: c.get('requestId') }, actorLimit.status); }
   const parsedBody = await readJsonBodyWithLimit<AssetPositionBody>(c);
   if (!parsedBody.ok) return c.json({ error: parsedBody.error }, parsedBody.status);
   const body = parsedBody.body;
@@ -162,8 +234,8 @@ app.post('/api/v1/ingest/assets/:assetId/position', async (c) => {
   const metadataJson = JSON.stringify(validMetadata(body.metadata));
   if (new TextEncoder().encode(metadataJson).byteLength > 8192) return c.json({ error: 'metadata_too_large' }, 413);
   try {
-    const keyHash = await sha256Hex(rawKey); const sql = neon(c.env.DATABASE_URL);
-    const rows = await sql`select * from public.ingest_asset_position(${assetId}::uuid,${body.deviceId}::uuid,${keyHash}::text,${body.eventId ?? null}::text,${parsed.toISOString()}::timestamptz,${body.latitude}::double precision,${body.longitude}::double precision,${body.speedKmh ?? null}::numeric,${body.headingDegrees ?? null}::numeric,${body.accuracyM ?? null}::numeric,${metadataJson}::jsonb)`;
+    const sql = neon(c.env.DATABASE_URL);
+    const rows = await sql`select * from public.ingest_asset_position(${assetId}::uuid,${body.deviceId}::uuid,${actorLimit.keyHash}::text,${body.eventId ?? null}::text,${parsed.toISOString()}::timestamptz,${body.latitude}::double precision,${body.longitude}::double precision,${body.speedKmh ?? null}::numeric,${body.headingDegrees ?? null}::numeric,${body.accuracyM ?? null}::numeric,${metadataJson}::jsonb)`;
     const row = rows[0] as { accepted: boolean; inside_geofence: boolean | null; transition: string; received_at: string } | undefined;
     if (!row) return c.json({ error: 'ingest_failed' }, 500);
     return c.json({ accepted: row.accepted, insideGeofence: row.inside_geofence, transition: row.transition, receivedAt: row.received_at }, 202);
