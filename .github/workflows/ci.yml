@@ -69,6 +69,8 @@ jobs:
         run: pnpm backup:check
       - name: Evidence storage readiness invariants
         run: pnpm evidence-storage:check
+      - name: External alerts readiness invariants
+        run: pnpm external-alerts:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies
