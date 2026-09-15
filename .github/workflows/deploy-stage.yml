@@ -25,17 +25,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.0.0
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-
       - name: Require private repository
         shell: bash
         run: |
@@ -43,22 +40,14 @@ jobs:
             echo "::error::iFarm Security repository must be private before any Cloudflare deployment. No Cloudflare call was made."
             exit 1
           fi
-
       - name: Require isolated Cloudflare credentials
         env:
           CF_API_TOKEN: ${{ secrets.IFARM_SECURITY_CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
-          if [ -z "$CF_API_TOKEN" ]; then
-            echo "::error::Missing dedicated secret IFARM_SECURITY_CLOUDFLARE_API_TOKEN. No Cloudflare call was made."
-            exit 1
-          fi
-          if [ -z "$CF_ACCOUNT_ID" ]; then
-            echo "::error::Missing dedicated secret IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID. No Cloudflare call was made."
-            exit 1
-          fi
-
+          if [ -z "$CF_API_TOKEN" ]; then echo "::error::Missing dedicated secret IFARM_SECURITY_CLOUDFLARE_API_TOKEN. No Cloudflare call was made."; exit 1; fi
+          if [ -z "$CF_ACCOUNT_ID" ]; then echo "::error::Missing dedicated secret IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID. No Cloudflare call was made."; exit 1; fi
       - name: Security gates
         run: |
           pnpm security:check
@@ -82,19 +71,16 @@ jobs:
           pnpm backup:check
           pnpm evidence-storage:check
           pnpm alert-delivery:check
+          pnpm device-keys:check
           pnpm deploy:check
-
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
-
       - name: Test and typecheck
         run: |
           pnpm test
           pnpm typecheck
-
       - name: Build STAGE web
         run: pnpm --filter @ifarm-security/web build
-
       - name: Validate Pages artifact
         shell: bash
         run: |
@@ -105,7 +91,6 @@ jobs:
           grep -Fxq '/* /index.html 200' apps/web/dist/_redirects
           cmp apps/web/public/_headers apps/web/dist/_headers
           cmp apps/web/public/robots.txt apps/web/dist/robots.txt
-
       - name: Bootstrap isolated Pages project if absent
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.IFARM_SECURITY_CLOUDFLARE_API_TOKEN }}
@@ -118,7 +103,6 @@ jobs:
           else
             npx --yes wrangler@4.130.0 pages project create "$IFARM_SECURITY_CF_PROJECT" --production-branch=stage
           fi
-
       - name: Deploy STAGE
         id: deploy
         uses: cloudflare/wrangler-action@v4
@@ -127,7 +111,6 @@ jobs:
           accountId: ${{ secrets.IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4.130.0"
           command: pages deploy apps/web/dist --project-name=${{ env.IFARM_SECURITY_CF_PROJECT }} --branch=stage --commit-hash=${{ github.sha }}
-
       - name: Public smoke
         env:
           DEPLOYMENT_ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
@@ -135,10 +118,7 @@ jobs:
         shell: bash
         run: |
           STAGE_URL="${DEPLOYMENT_ALIAS_URL:-$DEPLOYMENT_URL}"
-          if [ -z "$STAGE_URL" ]; then
-            echo "::error::Cloudflare deploy completed without a deployment URL output."
-            exit 1
-          fi
+          if [ -z "$STAGE_URL" ]; then echo "::error::Cloudflare deploy completed without a deployment URL output."; exit 1; fi
           IFARM_SECURITY_STAGE_URL="$STAGE_URL" pnpm stage:smoke
           echo "### iFarm Security STAGE" >> "$GITHUB_STEP_SUMMARY"
           echo "- Project: $IFARM_SECURITY_CF_PROJECT" >> "$GITHUB_STEP_SUMMARY"
