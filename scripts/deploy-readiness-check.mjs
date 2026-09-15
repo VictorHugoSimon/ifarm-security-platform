@@ -32,6 +32,7 @@ requireInvariant(rootPackage.scripts?.['pilot:check'] === 'node scripts/pilot-re
 requireInvariant(rootPackage.scripts?.['http-security:check'] === 'node scripts/http-security-check.mjs', 'HTTP security invariant script must remain registered.');
 requireInvariant(rootPackage.scripts?.['auth-provider:check'] === 'node scripts/auth-provider-contract-check.mjs', 'auth provider contract gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['admin-bootstrap:check'] === 'node scripts/admin-bootstrap-check.mjs', 'controlled admin bootstrap gate must remain registered.');
+requireInvariant(rootPackage.scripts?.['admin-lifecycle:check'] === 'node scripts/platform-admin-lifecycle-check.mjs', 'platform admin lifecycle gate must remain registered.');
 requireInvariant(webPackage.scripts?.build === 'tsc -b && vite build', 'web build contract changed unexpectedly.');
 requireInvariant(viteConfig.includes('defineConfig') && viteConfig.includes('react()'), 'web must remain a Vite React application.');
 requireInvariant(redirects === '/* /index.html 200', 'Cloudflare Pages SPA fallback must rewrite unknown paths to index.html with status 200.');
@@ -78,6 +79,7 @@ for (const expected of [
   'pnpm auth:check',
   'pnpm auth-provider:check',
   'pnpm admin-bootstrap:check',
+  'pnpm admin-lifecycle:check',
   'test -f apps/web/dist/_headers',
   'test -f apps/web/dist/robots.txt',
   'cmp apps/web/public/_headers apps/web/dist/_headers',
@@ -99,4 +101,4 @@ requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_API_TOKEN'), 'gener
 requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_ACCOUNT_ID'), 'generic CLOUDFLARE_ACCOUNT_ID secret name is forbidden; use the iFarm Security dedicated secret.');
 requireInvariant(!/(?:DATABASE_URL|POSTGRES_URL|NEON_API_KEY|NEON_DATABASE_URL)/.test(stageWorkflow), 'STAGE deploy workflow must not receive privileged database credentials.');
 
-console.log('Deploy readiness check passed: private-repo gate, isolated Cloudflare credentials, access lifecycle/audit/navigation/access-aware-navigation/access-landing/support/privacy/pilot/auth-provider/admin-bootstrap gates, HTTP security artifact, pinned Wrangler, Pages contract and smoke gate preserved.');
+console.log('Deploy readiness check passed: private-repo gate, isolated Cloudflare credentials, access lifecycle/audit/navigation/access-aware-navigation/access-landing/support/privacy/pilot/auth-provider/admin-bootstrap/admin-lifecycle gates, HTTP security artifact, pinned Wrangler, Pages contract and smoke gate preserved.');

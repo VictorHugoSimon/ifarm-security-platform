@@ -63,6 +63,8 @@ jobs:
         run: pnpm auth-provider:check
       - name: Admin bootstrap invariants
         run: pnpm admin-bootstrap:check
+      - name: Admin lifecycle invariants
+        run: pnpm admin-lifecycle:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies
