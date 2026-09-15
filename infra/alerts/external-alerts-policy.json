@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "internalChannel": {
+    "app": "available"
+  },
+  "externalChannels": {
+    "push": { "status": "blocked_external", "provider": null },
+    "email": { "status": "blocked_external", "provider": null },
+    "sms": { "status": "blocked_external", "provider": null },
+    "whatsapp": { "status": "blocked_external", "provider": null, "officialOrHomologatedOnly": true }
+  },
+  "delivery": {
+    "dispatcherImplemented": false,
+    "serverOnlyCredentials": true,
+    "providerSecretsInDatabase": false,
+    "providerSecretsInBrowser": false,
+    "deduplicationRequired": true,
+    "retryPolicyRequired": true,
+    "providerMessageIdRequiredOnSuccess": true,
+    "recipientConsentAndContactValidationRequired": true,
+    "humanMonitoringAssumed": false,
+    "publicDispatchEnabled": false
+  },
+  "productionGate": {
+    "externalDeliveryAllowed": false,
+    "requires": [
+      "provider_selected_and_contractually_authorized",
+      "dedicated_server_secret_configured",
+      "recipient_consent_and_contact_verified",
+      "template_and_content_reviewed",
+      "retry_dedupe_rate_limit_tested",
+      "provider_receipt_audit_tested",
+      "incident_response_runbook_approved"
+    ]
+  }
+}
