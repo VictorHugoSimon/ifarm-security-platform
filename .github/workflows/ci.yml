@@ -61,6 +61,8 @@ jobs:
         run: pnpm auth:check
       - name: Auth provider contract invariants
         run: pnpm auth-provider:check
+      - name: Admin bootstrap invariants
+        run: pnpm admin-bootstrap:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies
