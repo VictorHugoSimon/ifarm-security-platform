@@ -8,6 +8,25 @@ preview_urls = false
 APP_ENV = "stage"
 APP_NAME = "iFarm Security"
 
+# Candidate namespaces reserved exclusively for iFarm Security STAGE.
+# Deployment remains blocked until IFARM_SECURITY_RATE_LIMIT_NAMESPACES_APPROVED=true
+# confirms these integer IDs do not collide with another Worker in the Cloudflare account.
+[[ratelimits]]
+name = "INGEST_ACTOR_RATE_LIMITER"
+namespace_id = "193001"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+[[ratelimits]]
+name = "INGEST_ROUTE_ABUSE_GUARD"
+namespace_id = "193002"
+
+  [ratelimits.simple]
+  limit = 6000
+  period = 60
+
 [triggers]
 crons = ["*/5 * * * *"]
 
