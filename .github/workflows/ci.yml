@@ -71,6 +71,8 @@ jobs:
         run: pnpm evidence-storage:check
       - name: Alert delivery readiness invariants
         run: pnpm alert-delivery:check
+      - name: API STAGE readiness invariants
+        run: pnpm api-stage:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies
