@@ -7,8 +7,13 @@ type HeartbeatStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
 type HeartbeatBody = { eventId?: string; status?: HeartbeatStatus; sourceAt?: string; batteryPct?: number; signalRssi?: number; connectionType?: string; metadata?: Record<string, unknown> };
 type AssetPositionBody = { deviceId: string; eventId?: string; recordedAt?: string; latitude: number; longitude: number; speedKmh?: number; headingDegrees?: number; accuracyM?: number; metadata?: Record<string, unknown> };
 
+type JsonBodyResult<T> =
+  | { ok: true; body: T }
+  | { ok: false; status: 400 | 413 | 415; error: 'invalid_json' | 'payload_too_large' | 'unsupported_media_type' };
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VALID_STATUS = new Set<HeartbeatStatus>(['online', 'offline', 'degraded', 'maintenance']);
+const MAX_INGEST_BODY_BYTES = 32768;
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 function structuredLog(level: 'info' | 'warn' | 'error', event: string, fields: Record<string, unknown> = {}) {
@@ -21,13 +26,65 @@ function requestIdFromHeader(value?: string) {
   return crypto.randomUUID();
 }
 
+function expectedMethod(pathname: string): 'GET' | 'POST' | null {
+  if (pathname === '/health' || pathname === '/ready' || pathname === '/api/v1/system/status') return 'GET';
+  if (/^\/api\/v1\/ingest\/devices\/[^/]+\/heartbeat$/.test(pathname)) return 'POST';
+  if (/^\/api\/v1\/ingest\/assets\/[^/]+\/position$/.test(pathname)) return 'POST';
+  return null;
+}
+
+function applySecurityHeaders(c: { header: (name: string, value: string) => void }) {
+  c.header('cache-control', 'no-store');
+  c.header('content-security-policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+  c.header('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+  c.header('referrer-policy', 'no-referrer');
+  c.header('x-content-type-options', 'nosniff');
+  c.header('x-frame-options', 'DENY');
+}
+
+async function readJsonBodyWithLimit<T>(c: { req: { header: (name: string) => string | undefined; text: () => Promise<string> } }): Promise<JsonBodyResult<T>> {
+  const contentType = c.req.header('content-type') || '';
+  const mediaType = (contentType.split(';', 1)[0] ?? '').trim().toLowerCase();
+  if (mediaType !== 'application/json') return { ok: false, status: 415, error: 'unsupported_media_type' };
+
+  const contentLengthHeader = c.req.header('content-length');
+  if (contentLengthHeader) {
+    const declaredBytes = Number(contentLengthHeader);
+    if (Number.isFinite(declaredBytes) && declaredBytes > MAX_INGEST_BODY_BYTES) {
+      return { ok: false, status: 413, error: 'payload_too_large' };
+    }
+  }
+
+  const raw = await c.req.text();
+  if (new TextEncoder().encode(raw).byteLength > MAX_INGEST_BODY_BYTES) {
+    return { ok: false, status: 413, error: 'payload_too_large' };
+  }
+
+  try {
+    return { ok: true, body: JSON.parse(raw) as T };
+  } catch {
+    return { ok: false, status: 400, error: 'invalid_json' };
+  }
+}
+
 app.use('*', async (c, next) => {
   const requestId = requestIdFromHeader(c.req.header('x-request-id'));
   const startedAt = Date.now();
+  const pathname = new URL(c.req.url).pathname;
+  let explicitStatus: number | undefined;
   c.set('requestId', requestId);
   c.header('x-request-id', requestId);
-  try { await next(); } finally {
-    structuredLog('info', 'http_request', { requestId, environment: c.env.APP_ENV, method: c.req.method, path: new URL(c.req.url).pathname, status: c.res.status, durationMs: Date.now() - startedAt });
+  applySecurityHeaders(c);
+  try {
+    const allowedMethod = expectedMethod(pathname);
+    if (allowedMethod && c.req.method !== allowedMethod) {
+      explicitStatus = 405;
+      c.header('allow', allowedMethod);
+      return c.json({ error: 'method_not_allowed', requestId }, 405);
+    }
+    await next();
+  } finally {
+    structuredLog('info', 'http_request', { requestId, environment: c.env.APP_ENV, method: c.req.method, path: pathname, status: explicitStatus ?? c.res.status, durationMs: Date.now() - startedAt });
   }
 });
 
@@ -50,17 +107,17 @@ app.get('/ready', async (c) => {
   try { const sql = neon(c.env.DATABASE_URL); await sql`select 1 as ready`; return c.json({ ready: true, databaseConfigured: true, databaseLatencyMs: Date.now() - startedAt, timestamp: new Date().toISOString() }); }
   catch { structuredLog('error', 'readiness_database_failed', { requestId: c.get('requestId'), environment: c.env.APP_ENV }); return c.json({ ready: false, databaseConfigured: true, reason: 'database_unavailable', timestamp: new Date().toISOString() }, 503); }
 });
-app.get('/api/v1/system/status', (c) => c.json({ product: c.env.APP_NAME, modules: ['identity', 'map', 'devices', 'telemetry', 'events', 'incidents', 'evidence', 'sos', 'asset-security', 'insurance', 'community', 'operations'], databaseConfigured: Boolean(c.env.DATABASE_URL), storageConfigured: false, humanMonitoringAssumed: false, publicDispatchEnabled: false, governmentIntegration: false, biometricMatching: false }));
+app.get('/api/v1/system/status', (c) => c.json({ product: c.env.APP_NAME, modules: ['identity', 'map', 'devices', 'telemetry', 'events', 'incidents', 'evidence', 'sos', 'asset-security', 'insurance', 'community', 'operations'], databaseConfigured: Boolean(c.env.DATABASE_URL), storageConfigured: false, distributedRateLimitingConfigured: false, humanMonitoringAssumed: false, publicDispatchEnabled: false, governmentIntegration: false, biometricMatching: false }));
 
 app.post('/api/v1/ingest/devices/:deviceId/heartbeat', async (c) => {
   if (!c.env.DATABASE_URL) return c.json({ error: 'service_not_configured' }, 503);
   const deviceId = c.req.param('deviceId');
   if (!UUID_PATTERN.test(deviceId)) return c.json({ error: 'invalid_device_id' }, 400);
-  const contentLength = Number(c.req.header('content-length') || '0');
-  if (Number.isFinite(contentLength) && contentLength > 32768) return c.json({ error: 'payload_too_large' }, 413);
   const rawKey = deviceKeyFromAuthorization(c.req.header('authorization'));
   if (rawKey.length < 32 || rawKey.length > 200) return c.json({ error: 'unauthorized' }, 401);
-  let body: HeartbeatBody; try { body = await c.req.json<HeartbeatBody>(); } catch { return c.json({ error: 'invalid_json' }, 400); }
+  const parsedBody = await readJsonBodyWithLimit<HeartbeatBody>(c);
+  if (!parsedBody.ok) return c.json({ error: parsedBody.error }, parsedBody.status);
+  const body = parsedBody.body;
   const status = body.status;
   if (!status || !VALID_STATUS.has(status)) return c.json({ error: 'invalid_status' }, 400);
   if (body.eventId !== undefined && (!body.eventId || body.eventId.length > 128)) return c.json({ error: 'invalid_event_id' }, 400);
@@ -89,11 +146,11 @@ app.post('/api/v1/ingest/assets/:assetId/position', async (c) => {
   if (!c.env.DATABASE_URL) return c.json({ error: 'service_not_configured' }, 503);
   const assetId = c.req.param('assetId');
   if (!UUID_PATTERN.test(assetId)) return c.json({ error: 'invalid_asset_id' }, 400);
-  const contentLength = Number(c.req.header('content-length') || '0');
-  if (Number.isFinite(contentLength) && contentLength > 32768) return c.json({ error: 'payload_too_large' }, 413);
   const rawKey = deviceKeyFromAuthorization(c.req.header('authorization'));
   if (rawKey.length < 32 || rawKey.length > 200) return c.json({ error: 'unauthorized' }, 401);
-  let body: AssetPositionBody; try { body = await c.req.json<AssetPositionBody>(); } catch { return c.json({ error: 'invalid_json' }, 400); }
+  const parsedBody = await readJsonBodyWithLimit<AssetPositionBody>(c);
+  if (!parsedBody.ok) return c.json({ error: parsedBody.error }, parsedBody.status);
+  const body = parsedBody.body;
   if (!UUID_PATTERN.test(body.deviceId || '')) return c.json({ error: 'invalid_device_id' }, 400);
   if (!Number.isFinite(body.latitude) || body.latitude < -90 || body.latitude > 90 || !Number.isFinite(body.longitude) || body.longitude < -180 || body.longitude > 180) return c.json({ error: 'invalid_coordinates' }, 400);
   if (body.eventId !== undefined && (!body.eventId || body.eventId.length > 128)) return c.json({ error: 'invalid_event_id' }, 400);
@@ -119,6 +176,8 @@ app.post('/api/v1/ingest/assets/:assetId/position', async (c) => {
     structuredLog('error', 'asset_position_ingest_failed', { requestId: c.get('requestId'), environment: c.env.APP_ENV }); return c.json({ error: 'internal_error' }, 500);
   }
 });
+
+app.notFound((c) => c.json({ error: 'not_found', requestId: c.get('requestId') }, 404));
 
 async function reconcileStaleDevices(env: Bindings) {
   if (!env.DATABASE_URL) { structuredLog('warn', 'scheduled_reconcile_skipped', { environment: env.APP_ENV, reason: 'database_not_configured' }); return; }

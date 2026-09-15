@@ -33,6 +33,7 @@ requireInvariant(rootPackage.scripts?.['backup:check'] === 'node scripts/backup-
 requireInvariant(rootPackage.scripts?.['evidence-storage:check'] === 'node scripts/evidence-storage-readiness-check.mjs', 'evidence storage readiness gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['alert-delivery:check'] === 'node scripts/alert-delivery-readiness-check.mjs', 'alert delivery readiness gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['api-stage:check'] === 'node scripts/api-stage-readiness-check.mjs', 'API STAGE readiness gate must remain registered.');
+requireInvariant(rootPackage.scripts?.['api-security:check'] === 'node scripts/api-security-perimeter-check.mjs', 'API security perimeter gate must remain registered.');
 requireInvariant(webPackage.scripts?.build === 'tsc -b && vite build', 'web build contract changed unexpectedly.');
 requireInvariant(viteConfig.includes('defineConfig') && viteConfig.includes('react()'), 'web must remain a Vite React application.');
 requireInvariant(redirects === '/* /index.html 200', 'Cloudflare Pages SPA fallback must rewrite unknown paths to index.html with status 200.');
@@ -75,10 +76,13 @@ for (const expected of [
   'secrets.IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID',
   'secrets.IFARM_SECURITY_STAGE_DATABASE_URL',
   'pnpm api-stage:check',
+  'pnpm api-security:check',
   '--config apps/api/wrangler.stage.toml',
   '--secrets-file "$SECRET_FILE"',
-  'curl --fail --silent --show-error --max-time 20 "$API_URL/health"',
-  'curl --fail --silent --show-error --max-time 20 "$API_URL/ready"'
+  '-D "$HEALTH_HEADERS" "$API_URL/health"',
+  'curl --fail --silent --show-error --max-time 20 "$API_URL/ready"',
+  '"distributedRateLimitingConfigured":false',
+  '"error":"method_not_allowed"'
 ]) requireInvariant(apiStageWorkflow.includes(expected), `STAGE API deploy workflow missing invariant: ${expected}`);
 const apiPrivateGate = apiStageWorkflow.indexOf('- name: Require private repository');
 const apiCredentialGate = apiStageWorkflow.indexOf('- name: Require isolated deployment credentials');
