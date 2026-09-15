@@ -53,14 +53,29 @@ Permissões:
 ## MFA
 `app_users.mfa_required=true` permanece como requisito de produto. Em 2026-09-15, MFA para usuários finais continua indisponível no Managed Better Auth segundo o roadmap oficial já registrado na SEC-184. Isso é bloqueio de produção e não deve ser apresentado como implementado.
 
-## QA
-Antes de promover a migration:
-- DEV primeiro;
-- confirmar que `authenticated` não executa o finalizador;
-- confirmar que um usuário sintético `admin_ifarm` com `emailVerified=false` continua retornando `app_is_platform_admin() = false`;
-- reverter imediatamente qualquer papel sintético usado no teste para `user`;
-- repetir em STAGE;
-- PROD permanece intocado.
+## QA executado
+### DEV
+- migration `0026_controlled_admin_bootstrap.sql` aplicada;
+- `authenticated` executa `app_is_platform_admin()`;
+- `anonymous` não executa `app_is_platform_admin()`;
+- `authenticated` e `anonymous` não executam o finalizador;
+- sem sessão, `app_is_platform_admin() = false`;
+- `admin_ifarm_total = 0` e `eligible_admin_ifarm = 0`.
+
+### STAGE
+- mesma migration aplicada após DEV;
+- privilégios do finalizador confirmados como owner-only;
+- usuário QA `qa-admin-org@ifarm-security.test` recebeu temporariamente `admin_ifarm` via control plane oficial;
+- esse usuário permaneceu com `emailVerified=false`;
+- sob JWT QA autenticado, `app_is_platform_admin() = false`;
+- o finalizador rejeitou a identidade com `verified_email_required`;
+- o papel foi imediatamente restaurado para `user`;
+- estado final: `admin_ifarm_total = 0`, `eligible_admin_ifarm = 0`, `bootstrap_audit_rows = 0`.
+
+O teste comprova que possuir apenas o papel `admin_ifarm` não é suficiente para obter autoridade de plataforma.
 
 ## Primeiro Admin real
 Não criar o primeiro Admin iFarm real até existir uma identidade real explicitamente escolhida e verificada. Não inferir e-mail pessoal, não reutilizar usuário de outro projeto e não promover usuário QA.
+
+## PROD
+PROD não recebe a migration nesta fase e permanece fora do bootstrap até o gate formal de promoção.
