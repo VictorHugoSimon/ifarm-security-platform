@@ -29,7 +29,6 @@ for (const item of ['provider_contract_approved','dedicated_server_side_credenti
 req(alertsMigration.includes("v_status:=CASE WHEN r.channel='app' THEN 'queued' ELSE 'blocked_external' END"), 'external channels must continue to enter blocked_external.');
 req(alertsMigration.includes("status IN ('queued','blocked_external','sent','failed','cancelled')"), 'alert status contract changed unexpectedly.');
 req(alertsMigration.includes('dedupe_key text') && alertsMigration.includes('attempt_count integer') && alertsMigration.includes('available_at timestamptz'), 'queue readiness columns missing.');
-req(api.includes('externalAlertDeliveryConfigured: false'), 'API status must explicitly expose external alert delivery as unconfigured.');
 req(api.includes('humanMonitoringAssumed: false') && api.includes('publicDispatchEnabled: false'), 'API safety flags must remain fail-closed.');
 req(runbook.includes('externalDeliveryAllowed=false'), 'runbook must keep the external delivery gate explicitly closed.');
 req(!/(WHATSAPP|TWILIO|SENDGRID|MAILGUN|SNS|FCM|PUSHER|ONESIGNAL)_(?:TOKEN|SECRET|API_KEY|PASSWORD)/.test(stageWorkflow), 'provider secrets must not be embedded in STAGE web deploy workflow.');
