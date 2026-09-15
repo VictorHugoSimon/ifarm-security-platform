@@ -1,0 +1,15 @@
+name = "ifarm-security-api-stage"
+main = "src/index.ts"
+compatibility_date = "2026-09-15"
+workers_dev = true
+preview_urls = false
+
+[vars]
+APP_ENV = "stage"
+APP_NAME = "iFarm Security"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+# DATABASE_URL is injected only at deploy time via Wrangler --secrets-file.
+# Never commit the value and never reuse credentials from another project.
