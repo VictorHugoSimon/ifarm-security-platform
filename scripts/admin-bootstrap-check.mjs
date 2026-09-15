@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 const migration = readFileSync('packages/db/migrations/0026_controlled_admin_bootstrap.sql', 'utf8');
 const authGate = readFileSync('apps/web/src/AuthGate.tsx', 'utf8');
-const invitationMigration = readFileSync('packages/db/migrations/0021_access_invitation_delegation.sql', 'utf8');
+const invitationMigration = readFileSync('packages/db/migrations/0019_access_invitations.sql', 'utf8');
 const fail = (message) => { console.error(`Admin bootstrap check failed: ${message}`); process.exit(1); };
 const req = (condition, message) => { if (!condition) fail(message); };
 
@@ -18,6 +18,7 @@ req(migration.includes("'control_plane', 'neon_auth_operator'"), 'audit must ide
 req(migration.includes('REVOKE ALL ON FUNCTION public.app_finalize_first_platform_admin_bootstrap(uuid, text, text)\n  FROM PUBLIC, anonymous, authenticated'), 'bootstrap finalizer must not be portal-executable.');
 req(!migration.includes('GRANT EXECUTE ON FUNCTION public.app_finalize_first_platform_admin_bootstrap'), 'bootstrap finalizer must never be granted to portal roles.');
 req(authGate.includes('user?.emailVerified !== true'), 'frontend verified-email gate must remain enabled.');
-req(invitationMigration.includes("role IN ('admin_organization','admin_neighborhood','owner','family','employee','technician','monitoring')"), 'tenant invitation allowlist must exclude admin_ifarm.');
+req(invitationMigration.includes("IF v_role IN ('admin_ifarm','authorized_authority','insurance_partner')"), 'tenant invitation flow must route admin_ifarm to separate onboarding.');
+req(invitationMigration.includes("RAISE EXCEPTION 'invitation_role_requires_separate_onboarding'"), 'tenant invitation flow must reject admin_ifarm.');
 
 console.log('Admin bootstrap check passed: verified/non-banned platform authority, owner-only one-time finalizer, email binding, audit trail and tenant invitation exclusion preserved.');
