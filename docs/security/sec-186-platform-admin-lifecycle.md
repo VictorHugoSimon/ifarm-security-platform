@@ -78,11 +78,28 @@ Os eventos guardam `auth_user_id`, motivo e contagens de continuidade. Não grav
 ## MFA
 Permanece requisito do produto, mas não é declarado implementado enquanto o Managed Better Auth não oferecer MFA de usuário final. `mfa_provider_support='pending'` permanece explícito nos eventos.
 
-## QA e promoção
-- CI estática primeiro;
-- migration `0027` em DEV;
-- validar grants owner-only e que papel sem evento auditado não produz autoridade;
-- promover para STAGE;
-- como ainda não existe bootstrap real em STAGE, validar fail-closed `platform_admin_bootstrap_required` e privilégios;
-- teste positivo completo de promoção/revogação fica pendente até existir o primeiro administrador real/auditado;
-- PROD permanece intocado nesta fase.
+## QA executado
+### DEV
+- migration `0027_platform_admin_lifecycle.sql` aplicada após CI verde;
+- `authenticated` executa apenas `app_is_platform_admin()`;
+- `authenticated` não executa `app_platform_admin_identity_is_active`, preflight ou finalizador;
+- `anonymous` não executa `app_is_platform_admin()`;
+- sem sessão, autoridade de plataforma = `false`;
+- não existe `platform_admin.bootstrap.completed`;
+- preflight owner-only retorna `platform_admin_bootstrap_required`, como esperado.
+
+### STAGE
+- mesma migration aplicada após DEV;
+- avaliador interno, preflight e finalizador confirmados owner-only;
+- identidade QA `c439ec17-9720-45b0-a1b1-1fe5baf38083` retorna `app_platform_admin_identity_is_active=false`;
+- sob JWT QA autenticado, `app_is_platform_admin()=false`;
+- `bootstrap_rows=0`;
+- preflight recusa operação com `platform_admin_bootstrap_required`.
+
+Não foi criado, promovido ou revogado nenhum Admin iFarm real durante a SEC-186.
+
+## Teste positivo pendente
+O teste positivo completo de promoção → autoridade auditada → preflight → revogação exige o primeiro bootstrap real da SEC-185. Até existir uma identidade real explicitamente escolhida e verificada, criar um estado sintético positivo mascararia justamente a proteção que esta feature pretende garantir. O teste positivo fica como critério obrigatório do primeiro onboarding administrativo controlado.
+
+## PROD
+PROD permanece intocado nesta fase.
