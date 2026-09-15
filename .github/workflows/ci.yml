@@ -73,6 +73,8 @@ jobs:
         run: pnpm alert-delivery:check
       - name: API STAGE readiness invariants
         run: pnpm api-stage:check
+      - name: Device ingest key lifecycle invariants
+        run: pnpm device-keys:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies
