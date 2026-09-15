@@ -30,6 +30,7 @@ requireInvariant(rootPackage.scripts?.['admin-bootstrap:check'] === 'node script
 requireInvariant(rootPackage.scripts?.['admin-lifecycle:check'] === 'node scripts/platform-admin-lifecycle-check.mjs', 'platform admin lifecycle gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['backup:check'] === 'node scripts/backup-readiness-check.mjs', 'backup/restore readiness gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['evidence-storage:check'] === 'node scripts/evidence-storage-readiness-check.mjs', 'evidence storage readiness gate must remain registered.');
+requireInvariant(rootPackage.scripts?.['alert-delivery:check'] === 'node scripts/alert-delivery-readiness-check.mjs', 'alert delivery readiness gate must remain registered.');
 requireInvariant(webPackage.scripts?.build === 'tsc -b && vite build', 'web build contract changed unexpectedly.');
 requireInvariant(viteConfig.includes('defineConfig') && viteConfig.includes('react()'), 'web must remain a Vite React application.');
 requireInvariant(redirects === '/* /index.html 200', 'Cloudflare Pages SPA fallback must rewrite unknown paths to index.html with status 200.');
@@ -53,7 +54,7 @@ for (const expected of [
   'wrangler@4.130.0 pages project create',
   'wranglerVersion: "4.130.0"',
   '--project-name=${{ env.IFARM_SECURITY_CF_PROJECT }} --branch=stage',
-  'pnpm privileges:check','pnpm invitations:check','pnpm memberships:check','pnpm access-audit:check','pnpm navigation:check','pnpm access-navigation:check','pnpm access-landing:check','pnpm support:check','pnpm privacy:check','pnpm pilot:check','pnpm http-security:check','pnpm auth:check','pnpm auth-provider:check','pnpm admin-bootstrap:check','pnpm admin-lifecycle:check','pnpm backup:check','pnpm evidence-storage:check',
+  'pnpm privileges:check','pnpm invitations:check','pnpm memberships:check','pnpm access-audit:check','pnpm navigation:check','pnpm access-navigation:check','pnpm access-landing:check','pnpm support:check','pnpm privacy:check','pnpm pilot:check','pnpm http-security:check','pnpm auth:check','pnpm auth-provider:check','pnpm admin-bootstrap:check','pnpm admin-lifecycle:check','pnpm backup:check','pnpm evidence-storage:check','pnpm alert-delivery:check',
   'test -f apps/web/dist/_headers','test -f apps/web/dist/robots.txt','cmp apps/web/public/_headers apps/web/dist/_headers','pnpm stage:smoke',
   "github.repository == 'VictorHugoSimon/ifarm-security-platform'","github.ref == 'refs/heads/main'",'${{ github.event.repository.visibility }}','iFarm Security repository must be private before any Cloudflare deployment'
 ]) requireInvariant(stageWorkflow.includes(expected), `STAGE deploy workflow missing invariant: ${expected}`);
@@ -66,4 +67,4 @@ requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_API_TOKEN'), 'gener
 requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_ACCOUNT_ID'), 'generic CLOUDFLARE_ACCOUNT_ID secret name is forbidden; use the iFarm Security dedicated secret.');
 requireInvariant(!/(?:DATABASE_URL|POSTGRES_URL|NEON_API_KEY|NEON_DATABASE_URL)/.test(stageWorkflow), 'STAGE deploy workflow must not receive privileged database credentials.');
 
-console.log('Deploy readiness check passed: private-repo gate, isolated Cloudflare credentials, access lifecycle/audit/navigation/access-aware-navigation/access-landing/support/privacy/pilot/auth-provider/admin-bootstrap/admin-lifecycle/backup/evidence-storage gates, HTTP security artifact, pinned Wrangler, Pages contract and smoke gate preserved.');
+console.log('Deploy readiness check passed: private-repo gate, isolated Cloudflare credentials, access lifecycle/audit/navigation/access-aware-navigation/access-landing/support/privacy/pilot/auth-provider/admin-bootstrap/admin-lifecycle/backup/evidence-storage/alert-delivery gates, HTTP security artifact, pinned Wrangler, Pages contract and smoke gate preserved.');
