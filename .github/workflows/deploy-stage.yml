@@ -78,6 +78,7 @@ jobs:
           pnpm auth:check
           pnpm auth-provider:check
           pnpm admin-bootstrap:check
+          pnpm admin-lifecycle:check
           pnpm deploy:check
 
       - name: Install dependencies
