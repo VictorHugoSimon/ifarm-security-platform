@@ -60,6 +60,7 @@ jobs:
           pnpm alert-delivery:check
           pnpm api-stage:check
           pnpm api-security:check
+          pnpm device-keys:check
 
       - name: Test and typecheck API
         run: |
