@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "internalAppDelivery": {
+    "configured": true,
+    "channel": "app",
+    "queueStatus": "queued"
+  },
+  "externalDelivery": {
+    "configured": false,
+    "workerConfigured": false,
+    "providerSelected": false,
+    "providerCredentialsServerSideOnly": true,
+    "browserCredentialsAllowed": false,
+    "defaultQueueStatus": "blocked_external",
+    "automaticDispatchAllowed": false,
+    "retryEnabled": false,
+    "maxAttemptsTarget": 5,
+    "deduplicationRequired": true,
+    "providerMessageIdRequired": true
+  },
+  "channels": {
+    "push": { "configured": false },
+    "email": { "configured": false },
+    "sms": { "configured": false },
+    "whatsapp": { "configured": false, "requiresHomologatedProvider": true }
+  },
+  "safety": {
+    "humanMonitoringAssumed": false,
+    "publicDispatchEnabled": false,
+    "governmentIntegration": false,
+    "biometricMatching": false
+  },
+  "productionGate": {
+    "externalDeliveryAllowed": false,
+    "requires": [
+      "provider_contract_approved",
+      "dedicated_server_side_credentials",
+      "delivery_worker_deployed",
+      "retry_backoff_tested",
+      "dedupe_tested",
+      "provider_message_id_persisted",
+      "tenant_recipient_isolation_tested",
+      "opt_in_and_legal_basis_validated",
+      "delivery_failure_observability_tested"
+    ]
+  }
+}
