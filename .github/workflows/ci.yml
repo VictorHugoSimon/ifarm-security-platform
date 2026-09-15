@@ -65,6 +65,8 @@ jobs:
         run: pnpm admin-bootstrap:check
       - name: Admin lifecycle invariants
         run: pnpm admin-lifecycle:check
+      - name: Backup/restore readiness invariants
+        run: pnpm backup:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies
