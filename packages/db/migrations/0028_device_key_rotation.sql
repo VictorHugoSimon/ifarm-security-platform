@@ -142,6 +142,8 @@ BEGIN
 END
 $$;
 
+-- Keep the original RPC return signature for backward compatibility. Rotation state
+-- is exposed through the existing status field instead of adding a new result column.
 CREATE OR REPLACE FUNCTION public.list_device_ingest_keys(p_device_id uuid)
 RETURNS TABLE(
   id uuid,
@@ -150,8 +152,7 @@ RETURNS TABLE(
   expires_at timestamptz,
   last_used_at timestamptz,
   created_at timestamptz,
-  revoked_at timestamptz,
-  rotated_from_key_id uuid
+  revoked_at timestamptz
 )
 LANGUAGE plpgsql
 STABLE
@@ -179,8 +180,7 @@ BEGIN
     k.expires_at,
     k.last_used_at,
     k.created_at,
-    k.revoked_at,
-    k.rotated_from_key_id
+    k.revoked_at
   FROM public.device_ingest_keys k
   WHERE k.device_id = p_device_id
   ORDER BY k.created_at DESC;
