@@ -51,6 +51,21 @@ As funções de ingestão e suas implementações internas não são executávei
 
 Nenhuma chave bruta de dispositivo é gravada em logs ou retornada ao cliente.
 
+## Evidência DEV/STAGE — 2026-09-16
+
+A migration `0029` foi aplicada primeiro no DEV e depois no STAGE, sempre em transação única. PROD não foi alterado.
+
+Validações concluídas em ambos os ambientes:
+
+- wrappers `ingest_device_heartbeat` e `ingest_asset_position` presentes;
+- implementações internas `*_legacy_impl` presentes;
+- `authenticated_execute=false` e `anonymous_execute=false` nos quatro RPCs;
+- heartbeat com `eventId=NULL` retorna `invalid_event_id` antes da validação de chave/dispositivo;
+- GPS com `source_event_id=NULL` retorna `invalid_event_id` antes da validação de chave/dispositivo;
+- índices únicos de heartbeat e posição permanecem presentes.
+
+No STAGE não havia heartbeat QA com `event_id` e chave ativa correspondente reutilizável para um replay end-to-end sem fabricar fixture. Não foi criado dado apenas para satisfazer o teste. A semântica de duplicata permanece coberta pelos índices únicos, pelas implementações idempotentes existentes e pelo gate estático `replay:check`.
+
 ## Fora de escopo
 
 - Não implementa assinatura criptográfica por mensagem; a autenticação continua pela credencial rotacionável do dispositivo.
