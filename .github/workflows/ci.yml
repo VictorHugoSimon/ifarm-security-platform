@@ -85,6 +85,8 @@ jobs:
         run: pnpm idempotency:check
       - name: Ingest conflict response invariants
         run: pnpm ingest-conflict:check
+      - name: API idempotency contract invariants
+        run: pnpm api-idempotency:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies

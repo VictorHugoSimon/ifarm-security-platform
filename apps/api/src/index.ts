@@ -20,6 +20,7 @@ type RateLimitResult =
   | { ok: false; status: 429 | 503; error: 'rate_limited' | 'rate_limiter_not_configured' | 'rate_limiter_unavailable' };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const EVENT_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 const VALID_STATUS = new Set<HeartbeatStatus>(['online', 'offline', 'degraded', 'maintenance']);
 const MAX_INGEST_BODY_BYTES = 32768;
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -108,6 +109,7 @@ async function sha256Hex(value: string) {
 function deviceKeyFromAuthorization(value?: string) { if (!value?.startsWith('Device ')) return ''; return value.slice('Device '.length).trim(); }
 function validMetadata(value: unknown) { if (!value || Array.isArray(value) || typeof value !== 'object') return {}; return value as Record<string, unknown>; }
 export function isIdempotencyConflictError(message: string) { return message.includes('event_id_conflict'); }
+export function isValidEventId(value: unknown): value is string { return typeof value === 'string' && EVENT_ID_PATTERN.test(value); }
 function rateLimiterConfigured(env: Bindings) { return Boolean(env.INGEST_DEVICE_RATE_LIMITER && env.INGEST_ROUTE_RATE_LIMITER); }
 function rateLimiterRequired(env: Bindings) { return env.APP_ENV === 'stage' || env.APP_ENV === 'production'; }
 
@@ -176,8 +178,9 @@ app.post('/api/v1/ingest/devices/:deviceId/heartbeat', async (c) => {
   if (!parsedBody.ok) return c.json({ error: parsedBody.error }, parsedBody.status);
   const body = parsedBody.body;
   const status = body.status;
+  const eventId = body.eventId;
   if (!status || !VALID_STATUS.has(status)) return c.json({ error: 'invalid_status' }, 400);
-  if (body.eventId !== undefined && (!body.eventId || body.eventId.length > 128)) return c.json({ error: 'invalid_event_id' }, 400);
+  if (!isValidEventId(eventId)) return c.json({ error: 'invalid_event_id' }, 400);
   if (body.batteryPct !== undefined && (!Number.isFinite(body.batteryPct) || body.batteryPct < 0 || body.batteryPct > 100)) return c.json({ error: 'invalid_battery' }, 400);
   if (body.signalRssi !== undefined && (!Number.isInteger(body.signalRssi) || body.signalRssi < -200 || body.signalRssi > 0)) return c.json({ error: 'invalid_signal' }, 400);
   if (body.connectionType !== undefined && body.connectionType.length > 32) return c.json({ error: 'invalid_connection_type' }, 400);
@@ -187,7 +190,7 @@ app.post('/api/v1/ingest/devices/:deviceId/heartbeat', async (c) => {
   if (new TextEncoder().encode(metadataJson).byteLength > 8192) return c.json({ error: 'metadata_too_large' }, 413);
   try {
     const keyHash = await sha256Hex(rawKey); const sql = neon(c.env.DATABASE_URL);
-    const rows = await sql`select * from public.ingest_device_heartbeat(${deviceId}::uuid,${keyHash}::text,${body.eventId ?? null}::text,${status}::device_status,${sourceAt}::timestamptz,${body.batteryPct ?? null}::numeric,${body.signalRssi ?? null}::integer,${body.connectionType ?? null}::text,${metadataJson}::jsonb)`;
+    const rows = await sql`select * from public.ingest_device_heartbeat(${deviceId}::uuid,${keyHash}::text,${eventId}::text,${status}::device_status,${sourceAt}::timestamptz,${body.batteryPct ?? null}::numeric,${body.signalRssi ?? null}::integer,${body.connectionType ?? null}::text,${metadataJson}::jsonb)`;
     const row = rows[0] as { accepted: boolean; current_status: string; received_at: string; transition: string } | undefined;
     if (!row) return c.json({ error: 'ingest_failed' }, 500);
     return c.json({ accepted: row.accepted, status: row.current_status, receivedAt: row.received_at, transition: row.transition }, 202);
@@ -212,9 +215,10 @@ app.post('/api/v1/ingest/assets/:assetId/position', async (c) => {
   const parsedBody = await readJsonBodyWithLimit<AssetPositionBody>(c);
   if (!parsedBody.ok) return c.json({ error: parsedBody.error }, parsedBody.status);
   const body = parsedBody.body;
+  const eventId = body.eventId;
   if (!UUID_PATTERN.test(body.deviceId || '')) return c.json({ error: 'invalid_device_id' }, 400);
   if (!Number.isFinite(body.latitude) || body.latitude < -90 || body.latitude > 90 || !Number.isFinite(body.longitude) || body.longitude < -180 || body.longitude > 180) return c.json({ error: 'invalid_coordinates' }, 400);
-  if (body.eventId !== undefined && (!body.eventId || body.eventId.length > 128)) return c.json({ error: 'invalid_event_id' }, 400);
+  if (!isValidEventId(eventId)) return c.json({ error: 'invalid_event_id' }, 400);
   if (body.speedKmh !== undefined && (!Number.isFinite(body.speedKmh) || body.speedKmh < 0 || body.speedKmh > 500)) return c.json({ error: 'invalid_speed' }, 400);
   if (body.headingDegrees !== undefined && (!Number.isFinite(body.headingDegrees) || body.headingDegrees < 0 || body.headingDegrees >= 360)) return c.json({ error: 'invalid_heading' }, 400);
   if (body.accuracyM !== undefined && (!Number.isFinite(body.accuracyM) || body.accuracyM < 0 || body.accuracyM > 100000)) return c.json({ error: 'invalid_accuracy' }, 400);
@@ -224,7 +228,7 @@ app.post('/api/v1/ingest/assets/:assetId/position', async (c) => {
   if (new TextEncoder().encode(metadataJson).byteLength > 8192) return c.json({ error: 'metadata_too_large' }, 413);
   try {
     const keyHash = await sha256Hex(rawKey); const sql = neon(c.env.DATABASE_URL);
-    const rows = await sql`select * from public.ingest_asset_position(${assetId}::uuid,${body.deviceId}::uuid,${keyHash}::text,${body.eventId ?? null}::text,${parsed.toISOString()}::timestamptz,${body.latitude}::double precision,${body.longitude}::double precision,${body.speedKmh ?? null}::numeric,${body.headingDegrees ?? null}::numeric,${body.accuracyM ?? null}::numeric,${metadataJson}::jsonb)`;
+    const rows = await sql`select * from public.ingest_asset_position(${assetId}::uuid,${body.deviceId}::uuid,${keyHash}::text,${eventId}::text,${parsed.toISOString()}::timestamptz,${body.latitude}::double precision,${body.longitude}::double precision,${body.speedKmh ?? null}::numeric,${body.headingDegrees ?? null}::numeric,${body.accuracyM ?? null}::numeric,${metadataJson}::jsonb)`;
     const row = rows[0] as { accepted: boolean; inside_geofence: boolean | null; transition: string; received_at: string } | undefined;
     if (!row) return c.json({ error: 'ingest_failed' }, 500);
     return c.json({ accepted: row.accepted, insideGeofence: row.inside_geofence, transition: row.transition, receivedAt: row.received_at }, 202);

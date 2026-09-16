@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { app, isIdempotencyConflictError } from '../src/index.ts';
+import { app, isIdempotencyConflictError, isValidEventId } from '../src/index.ts';
 
 const baseEnv = { APP_ENV: 'test', APP_NAME: 'iFarm Security' };
 const fakeDbEnv = { ...baseEnv, DATABASE_URL: 'postgresql://placeholder.invalid/ifarm_security' };
@@ -15,6 +15,16 @@ test('idempotency conflict classifier only matches the explicit database signal'
   assert.equal(isIdempotencyConflictError('invalid_event_id'), false);
   assert.equal(isIdempotencyConflictError('unique_violation'), false);
   assert.equal(isIdempotencyConflictError(''), false);
+});
+
+test('event id contract requires a stable safe identifier', () => {
+  assert.equal(isValidEventId('evt-2026_09.16:abc'), true);
+  assert.equal(isValidEventId('a'.repeat(128)), true);
+  assert.equal(isValidEventId(undefined), false);
+  assert.equal(isValidEventId(''), false);
+  assert.equal(isValidEventId('a'.repeat(129)), false);
+  assert.equal(isValidEventId('bad id with spaces'), false);
+  assert.equal(isValidEventId('bad/route'), false);
 });
 
 test('health is liveness and does not require database', async () => {
@@ -105,7 +115,7 @@ test('STAGE ingest fails closed when rate limiting bindings are missing', async 
   const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, {
     method: 'POST',
     headers: { authorization: validDeviceKey, 'content-type': 'application/json' },
-    body: JSON.stringify({ status: 'online' })
+    body: JSON.stringify({ eventId: 'evt-stage-1', status: 'online' })
   }, { APP_ENV: 'stage', APP_NAME: 'iFarm Security', DATABASE_URL: 'postgresql://placeholder.invalid/ifarm_security' });
   assert.equal(response.status, 503);
   const body = await json(response);
@@ -125,7 +135,7 @@ test('rate limiting uses a hashed device credential and returns 429', async () =
   const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, {
     method: 'POST',
     headers: { authorization: validDeviceKey, 'content-type': 'application/json' },
-    body: JSON.stringify({ status: 'online' })
+    body: JSON.stringify({ eventId: 'evt-rate-1', status: 'online' })
   }, {
     APP_ENV: 'stage',
     APP_NAME: 'iFarm Security',
@@ -147,6 +157,22 @@ test('heartbeat rejects invalid device id before database access', async () => {
   assert.deepEqual(await json(response), { error: 'invalid_device_id' });
 });
 
+test('heartbeat rejects missing event id before database access', async () => {
+  const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, {
+    method: 'POST', headers: { authorization: validDeviceKey, 'content-type': 'application/json' }, body: JSON.stringify({ status: 'online' })
+  }, fakeDbEnv);
+  assert.equal(response.status, 400);
+  assert.deepEqual(await json(response), { error: 'invalid_event_id' });
+});
+
+test('heartbeat rejects event id outside the safe pattern before database access', async () => {
+  const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, {
+    method: 'POST', headers: { authorization: validDeviceKey, 'content-type': 'application/json' }, body: JSON.stringify({ eventId: 'bad event/id', status: 'online' })
+  }, fakeDbEnv);
+  assert.equal(response.status, 400);
+  assert.deepEqual(await json(response), { error: 'invalid_event_id' });
+});
+
 test('heartbeat rejects oversized declared payload before authentication/database access', async () => {
   const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, { method: 'POST', headers: { authorization: validDeviceKey, 'content-type': 'application/json', 'content-length': '32769' }, body: '{}' }, fakeDbEnv);
   assert.equal(response.status, 413);
@@ -154,14 +180,14 @@ test('heartbeat rejects oversized declared payload before authentication/databas
 });
 
 test('heartbeat rejects oversized actual payload even without content-length', async () => {
-  const body = JSON.stringify({ status: 'online', metadata: { padding: 'x'.repeat(33000) } });
+  const body = JSON.stringify({ eventId: 'evt-big-1', status: 'online', metadata: { padding: 'x'.repeat(33000) } });
   const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, { method: 'POST', headers: { authorization: validDeviceKey, 'content-type': 'application/json' }, body }, fakeDbEnv);
   assert.equal(response.status, 413);
   assert.deepEqual(await json(response), { error: 'payload_too_large' });
 });
 
 test('heartbeat rejects unsupported media type before JSON parsing/database access', async () => {
-  const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, { method: 'POST', headers: { authorization: validDeviceKey, 'content-type': 'text/plain' }, body: '{"status":"online"}' }, fakeDbEnv);
+  const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, { method: 'POST', headers: { authorization: validDeviceKey, 'content-type': 'text/plain' }, body: '{"eventId":"evt-1","status":"online"}' }, fakeDbEnv);
   assert.equal(response.status, 415);
   assert.deepEqual(await json(response), { error: 'unsupported_media_type' });
 });
@@ -173,7 +199,15 @@ test('heartbeat rejects missing device credential before database access', async
 });
 
 test('asset position rejects invalid coordinates before database access', async () => {
-  const response = await app.request(`/api/v1/ingest/assets/${validId}/position`, { method: 'POST', headers: { authorization: validDeviceKey, 'content-type': 'application/json' }, body: JSON.stringify({ deviceId: validId, latitude: 91, longitude: -50 }) }, fakeDbEnv);
+  const response = await app.request(`/api/v1/ingest/assets/${validId}/position`, { method: 'POST', headers: { authorization: validDeviceKey, 'content-type': 'application/json' }, body: JSON.stringify({ deviceId: validId, eventId: 'gps-1', latitude: 91, longitude: -50 }) }, fakeDbEnv);
   assert.equal(response.status, 400);
   assert.deepEqual(await json(response), { error: 'invalid_coordinates' });
+});
+
+test('asset position rejects missing event id before database access', async () => {
+  const response = await app.request(`/api/v1/ingest/assets/${validId}/position`, {
+    method: 'POST', headers: { authorization: validDeviceKey, 'content-type': 'application/json' }, body: JSON.stringify({ deviceId: validId, latitude: -21.1, longitude: -50.1 })
+  }, fakeDbEnv);
+  assert.equal(response.status, 400);
+  assert.deepEqual(await json(response), { error: 'invalid_event_id' });
 });
