@@ -29,6 +29,7 @@
     "alert-delivery:check": "node scripts/alert-delivery-readiness-check.mjs",
     "api-stage:check": "node scripts/api-stage-readiness-check.mjs",
     "api-security:check": "node scripts/api-security-perimeter-check.mjs",
+    "rate-limit:check": "node scripts/distributed-rate-limit-check.mjs",
     "device-keys:check": "node scripts/device-key-rotation-check.mjs",
     "deploy:check": "node scripts/deploy-readiness-check.mjs",
     "stage:smoke": "node scripts/stage-smoke.mjs",
