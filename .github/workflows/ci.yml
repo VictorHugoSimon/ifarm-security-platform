@@ -89,6 +89,8 @@ jobs:
         run: pnpm api-idempotency:check
       - name: Heartbeat ordering invariants
         run: pnpm heartbeat-ordering:check
+      - name: Telemetry timing observability invariants
+        run: pnpm telemetry-timing:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies
