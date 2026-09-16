@@ -8,8 +8,25 @@ preview_urls = false
 APP_ENV = "stage"
 APP_NAME = "iFarm Security"
 
+[[ratelimits]]
+name = "INGEST_DEVICE_RATE_LIMITER"
+namespace_id = "1932609161"
+
+[ratelimits.simple]
+limit = 120
+period = 60
+
+[[ratelimits]]
+name = "INGEST_ROUTE_RATE_LIMITER"
+namespace_id = "1932609162"
+
+[ratelimits.simple]
+limit = 6000
+period = 60
+
 [triggers]
 crons = ["*/5 * * * *"]
 
+# Rate-limit namespace IDs are reserved exclusively for iFarm Security STAGE.
 # DATABASE_URL is injected only at deploy time via Wrangler --secrets-file.
-# Never commit the value and never reuse credentials from another project.
+# Never commit the value and never reuse credentials or bindings from another project.

@@ -5,7 +5,8 @@ import { app } from '../src/index.ts';
 const baseEnv = { APP_ENV: 'test', APP_NAME: 'iFarm Security' };
 const fakeDbEnv = { ...baseEnv, DATABASE_URL: 'postgresql://placeholder.invalid/ifarm_security' };
 const validId = '11111111-1111-4111-8111-111111111111';
-const validDeviceKey = `Device ${'x'.repeat(32)}`;
+const rawDeviceKey = 'x'.repeat(32);
+const validDeviceKey = `Device ${rawDeviceKey}`;
 
 async function json(response: Response) { return response.json() as Promise<Record<string, unknown>>; }
 
@@ -64,6 +65,18 @@ test('system status keeps sensitive integrations disabled', async () => {
   assert.ok(modules.includes('operations'));
 });
 
+test('system status reports distributed rate limiting when both bindings exist', async () => {
+  const allow = { limit: async () => ({ success: true }) };
+  const response = await app.request('/api/v1/system/status', {}, {
+    ...baseEnv,
+    INGEST_DEVICE_RATE_LIMITER: allow,
+    INGEST_ROUTE_RATE_LIMITER: allow
+  });
+  assert.equal(response.status, 200);
+  const body = await json(response);
+  assert.equal(body.distributedRateLimitingConfigured, true);
+});
+
 test('known endpoint rejects wrong method with sanitized 405', async () => {
   const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, { method: 'GET' }, fakeDbEnv);
   assert.equal(response.status, 405);
@@ -79,6 +92,46 @@ test('unknown endpoint returns sanitized 404 with request id', async () => {
   const body = await json(response);
   assert.equal(body.error, 'not_found');
   assert.match(String(body.requestId || ''), /^[0-9a-f-]{36}$/i);
+});
+
+test('STAGE ingest fails closed when rate limiting bindings are missing', async () => {
+  const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, {
+    method: 'POST',
+    headers: { authorization: validDeviceKey, 'content-type': 'application/json' },
+    body: JSON.stringify({ status: 'online' })
+  }, { APP_ENV: 'stage', APP_NAME: 'iFarm Security', DATABASE_URL: 'postgresql://placeholder.invalid/ifarm_security' });
+  assert.equal(response.status, 503);
+  const body = await json(response);
+  assert.equal(body.error, 'rate_limiter_not_configured');
+  assert.match(String(body.requestId || ''), /^[0-9a-f-]{36}$/i);
+});
+
+test('rate limiting uses a hashed device credential and returns 429', async () => {
+  let capturedDeviceKey = '';
+  const routeLimiter = { limit: async () => ({ success: true }) };
+  const deviceLimiter = {
+    limit: async ({ key }: { key: string }) => {
+      capturedDeviceKey = key;
+      return { success: false };
+    }
+  };
+  const response = await app.request(`/api/v1/ingest/devices/${validId}/heartbeat`, {
+    method: 'POST',
+    headers: { authorization: validDeviceKey, 'content-type': 'application/json' },
+    body: JSON.stringify({ status: 'online' })
+  }, {
+    APP_ENV: 'stage',
+    APP_NAME: 'iFarm Security',
+    DATABASE_URL: 'postgresql://placeholder.invalid/ifarm_security',
+    INGEST_DEVICE_RATE_LIMITER: deviceLimiter,
+    INGEST_ROUTE_RATE_LIMITER: routeLimiter
+  });
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get('retry-after'), '60');
+  const body = await json(response);
+  assert.equal(body.error, 'rate_limited');
+  assert.match(capturedDeviceKey, /^heartbeat:[0-9a-f]{64}$/);
+  assert.equal(capturedDeviceKey.includes(rawDeviceKey), false);
 });
 
 test('heartbeat rejects invalid device id before database access', async () => {

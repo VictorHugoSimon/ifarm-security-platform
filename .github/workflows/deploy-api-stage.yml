@@ -60,6 +60,7 @@ jobs:
           pnpm alert-delivery:check
           pnpm api-stage:check
           pnpm api-security:check
+          pnpm rate-limit:check
           pnpm device-keys:check
 
       - name: Test and typecheck API
@@ -128,7 +129,7 @@ jobs:
           grep -Eqi '^x-frame-options:[[:space:]]*DENY' "$HEALTH_HEADERS"
           printf '%s' "$READY" | grep -q '"ready":true'
           printf '%s' "$READY" | grep -q '"databaseConfigured":true'
-          printf '%s' "$STATUS" | grep -q '"distributedRateLimitingConfigured":false'
+          printf '%s' "$STATUS" | grep -q '"distributedRateLimitingConfigured":true'
           printf '%s' "$STATUS" | grep -q '"humanMonitoringAssumed":false'
           printf '%s' "$STATUS" | grep -q '"publicDispatchEnabled":false'
           printf '%s' "$STATUS" | grep -q '"governmentIntegration":false'
@@ -140,4 +141,4 @@ jobs:
           echo "### iFarm Security API STAGE" >> "$GITHUB_STEP_SUMMARY"
           echo "- Worker: $IFARM_SECURITY_API_STAGE_WORKER" >> "$GITHUB_STEP_SUMMARY"
           echo "- URL: $API_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "- health/ready/system-status/security-perimeter smoke: passed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- health/ready/system-status/security-perimeter/distributed-rate-limit smoke: passed" >> "$GITHUB_STEP_SUMMARY"

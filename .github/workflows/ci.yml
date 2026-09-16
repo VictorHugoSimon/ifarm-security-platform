@@ -75,6 +75,8 @@ jobs:
         run: pnpm api-stage:check
       - name: API security perimeter invariants
         run: pnpm api-security:check
+      - name: Distributed rate limiting invariants
+        run: pnpm rate-limit:check
       - name: Device key lifecycle invariants
         run: pnpm device-keys:check
       - name: Deploy readiness invariants
@@ -87,6 +89,9 @@ jobs:
         run: pnpm typecheck
       - name: Build
         run: pnpm build
+      - name: Validate API STAGE Worker config
+        shell: bash
+        run: npx --yes wrangler@4.130.0 deploy --config apps/api/wrangler.stage.toml --dry-run --outdir "$RUNNER_TEMP/ifarm-security-api-stage-ci"
       - name: Validate Pages security artifact
         shell: bash
         run: |

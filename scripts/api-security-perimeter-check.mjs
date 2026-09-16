@@ -21,7 +21,7 @@ for (const expected of [
   "c.header('x-content-type-options', 'nosniff')",
   "c.header('x-frame-options', 'DENY')",
   "frame-ancestors 'none'",
-  'distributedRateLimitingConfigured: false',
+  'distributedRateLimitingConfigured: rateLimiterConfigured(c.env)',
   'app.notFound('
 ]) req(api.includes(expected), `runtime perimeter invariant missing: ${expected}`);
 
@@ -36,7 +36,7 @@ for (const expected of [
 
 req(!api.includes('Access-Control-Allow-Origin: *'), 'wildcard CORS is forbidden on the ingest Worker.');
 req(!api.includes("'access-control-allow-origin', '*'"), 'wildcard CORS header is forbidden on the ingest Worker.');
-req(docs.includes('não substitui rate limiting distribuído'), 'documentation must state that application perimeter does not replace distributed rate limiting.');
-req(docs.includes('distributedRateLimitingConfigured=false'), 'documentation must keep distributed rate limiting explicitly fail-closed.');
+req(docs.includes('não substitui rate limiting distribuído'), 'documentation must state that application perimeter alone does not replace distributed rate limiting.');
+req(docs.includes('SEC-193 — Distributed Rate Limiting'), 'SEC-191 documentation must delegate the real distributed control to SEC-193.');
 
 console.log('API security perimeter check passed: body/media-type limits, method/not-found contracts, defensive headers and honest distributed-rate-limit status preserved.');
