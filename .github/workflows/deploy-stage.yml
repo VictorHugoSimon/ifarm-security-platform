@@ -87,6 +87,7 @@ jobs:
           pnpm replay:check
           pnpm idempotency:check
           pnpm ingest-conflict:check
+          pnpm api-idempotency:check
           pnpm deploy:check
 
       - name: Install dependencies
