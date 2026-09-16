@@ -1,15 +1,23 @@
 import { neon } from '@neondatabase/serverless';
 import { Hono } from 'hono';
 
-type Bindings = { APP_ENV: string; APP_NAME: string; DATABASE_URL?: string };
+type Bindings = {
+  APP_ENV: string;
+  APP_NAME: string;
+  DATABASE_URL?: string;
+  INGEST_DEVICE_RATE_LIMITER?: RateLimit;
+  INGEST_ROUTE_RATE_LIMITER?: RateLimit;
+};
 type Variables = { requestId: string };
 type HeartbeatStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
 type HeartbeatBody = { eventId?: string; status?: HeartbeatStatus; sourceAt?: string; batteryPct?: number; signalRssi?: number; connectionType?: string; metadata?: Record<string, unknown> };
 type AssetPositionBody = { deviceId: string; eventId?: string; recordedAt?: string; latitude: number; longitude: number; speedKmh?: number; headingDegrees?: number; accuracyM?: number; metadata?: Record<string, unknown> };
-
 type JsonBodyResult<T> =
   | { ok: true; body: T }
   | { ok: false; status: 400 | 413 | 415; error: 'invalid_json' | 'payload_too_large' | 'unsupported_media_type' };
+type RateLimitResult =
+  | { ok: true }
+  | { ok: false; status: 429 | 503; error: 'rate_limited' | 'rate_limiter_not_configured' | 'rate_limiter_unavailable' };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VALID_STATUS = new Set<HeartbeatStatus>(['online', 'offline', 'degraded', 'maintenance']);
@@ -99,6 +107,54 @@ async function sha256Hex(value: string) {
 }
 function deviceKeyFromAuthorization(value?: string) { if (!value?.startsWith('Device ')) return ''; return value.slice('Device '.length).trim(); }
 function validMetadata(value: unknown) { if (!value || Array.isArray(value) || typeof value !== 'object') return {}; return value as Record<string, unknown>; }
+function rateLimiterConfigured(env: Bindings) { return Boolean(env.INGEST_DEVICE_RATE_LIMITER && env.INGEST_ROUTE_RATE_LIMITER); }
+function rateLimiterRequired(env: Bindings) { return env.APP_ENV === 'stage' || env.APP_ENV === 'production'; }
+
+async function enforceIngestRateLimit(env: Bindings, routeKey: 'heartbeat' | 'asset-position', rawKey: string, requestId: string): Promise<RateLimitResult> {
+  if (!rateLimiterConfigured(env)) {
+    if (rateLimiterRequired(env)) {
+      structuredLog('error', 'rate_limiter_not_configured', { requestId, environment: env.APP_ENV, route: routeKey });
+      return { ok: false, status: 503, error: 'rate_limiter_not_configured' };
+    }
+    return { ok: true };
+  }
+
+  try {
+    const routeDecision = await env.INGEST_ROUTE_RATE_LIMITER!.limit({ key: routeKey });
+    if (!routeDecision.success) {
+      structuredLog('warn', 'ingest_rate_limited', { requestId, environment: env.APP_ENV, route: routeKey, scope: 'route' });
+      return { ok: false, status: 429, error: 'rate_limited' };
+    }
+
+    if (rawKey.length >= 32 && rawKey.length <= 200) {
+      const keyHash = await sha256Hex(rawKey);
+      const deviceDecision = await env.INGEST_DEVICE_RATE_LIMITER!.limit({ key: `${routeKey}:${keyHash}` });
+      if (!deviceDecision.success) {
+        structuredLog('warn', 'ingest_rate_limited', { requestId, environment: env.APP_ENV, route: routeKey, scope: 'device' });
+        return { ok: false, status: 429, error: 'rate_limited' };
+      }
+    }
+    return { ok: true };
+  } catch {
+    structuredLog('error', 'rate_limiter_failed', { requestId, environment: env.APP_ENV, route: routeKey });
+    if (rateLimiterRequired(env)) return { ok: false, status: 503, error: 'rate_limiter_unavailable' };
+    return { ok: true };
+  }
+}
+
+app.use('/api/v1/ingest/*', async (c, next) => {
+  if (c.req.method !== 'POST') return next();
+  const pathname = new URL(c.req.url).pathname;
+  const routeKey: 'heartbeat' | 'asset-position' | null = pathname.endsWith('/heartbeat') ? 'heartbeat' : pathname.endsWith('/position') ? 'asset-position' : null;
+  if (!routeKey) return next();
+  const rawKey = deviceKeyFromAuthorization(c.req.header('authorization'));
+  const decision = await enforceIngestRateLimit(c.env, routeKey, rawKey, c.get('requestId'));
+  if (!decision.ok) {
+    if (decision.status === 429) c.header('retry-after', '60');
+    return c.json({ error: decision.error, requestId: c.get('requestId') }, decision.status);
+  }
+  await next();
+});
 
 app.get('/health', (c) => c.json({ ok: true, type: 'liveness', service: 'ifarm-security-api', environment: c.env.APP_ENV, timestamp: new Date().toISOString() }));
 app.get('/ready', async (c) => {
@@ -107,7 +163,7 @@ app.get('/ready', async (c) => {
   try { const sql = neon(c.env.DATABASE_URL); await sql`select 1 as ready`; return c.json({ ready: true, databaseConfigured: true, databaseLatencyMs: Date.now() - startedAt, timestamp: new Date().toISOString() }); }
   catch { structuredLog('error', 'readiness_database_failed', { requestId: c.get('requestId'), environment: c.env.APP_ENV }); return c.json({ ready: false, databaseConfigured: true, reason: 'database_unavailable', timestamp: new Date().toISOString() }, 503); }
 });
-app.get('/api/v1/system/status', (c) => c.json({ product: c.env.APP_NAME, modules: ['identity', 'map', 'devices', 'telemetry', 'events', 'incidents', 'evidence', 'sos', 'asset-security', 'insurance', 'community', 'operations'], databaseConfigured: Boolean(c.env.DATABASE_URL), storageConfigured: false, distributedRateLimitingConfigured: false, humanMonitoringAssumed: false, publicDispatchEnabled: false, governmentIntegration: false, biometricMatching: false }));
+app.get('/api/v1/system/status', (c) => c.json({ product: c.env.APP_NAME, modules: ['identity', 'map', 'devices', 'telemetry', 'events', 'incidents', 'evidence', 'sos', 'asset-security', 'insurance', 'community', 'operations'], databaseConfigured: Boolean(c.env.DATABASE_URL), storageConfigured: false, distributedRateLimitingConfigured: rateLimiterConfigured(c.env), humanMonitoringAssumed: false, publicDispatchEnabled: false, governmentIntegration: false, biometricMatching: false }));
 
 app.post('/api/v1/ingest/devices/:deviceId/heartbeat', async (c) => {
   if (!c.env.DATABASE_URL) return c.json({ error: 'service_not_configured' }, 503);
