@@ -84,6 +84,7 @@ jobs:
           pnpm alert-delivery:check
           pnpm rate-limit:check
           pnpm device-keys:check
+          pnpm replay:check
           pnpm deploy:check
 
       - name: Install dependencies
