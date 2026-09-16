@@ -45,6 +45,30 @@ Qualquer diferença gera `event_id_conflict`.
 - O sistema não trata conflito como prova de ataque; ele é um sinal de integridade que deve ser registrado/observado pela camada operacional futura.
 - PROD não é alterado nesta fase.
 
+## Evidência DEV/STAGE — 2026-09-16
+
+### DEV
+
+- migration `0030_idempotency_conflict_detection.sql` aplicada em uma única transação;
+- `ingest_device_heartbeat` e `ingest_asset_position` permanecem `SECURITY DEFINER`;
+- `authenticated` e `anonymous` permanecem sem `EXECUTE`;
+- ambas as funções contêm o guard `event_id_conflict`.
+
+### STAGE
+
+- migration `0030_idempotency_conflict_detection.sql` aplicada com sucesso;
+- heartbeat sintético `QA-SEC195-HB-001`:
+  - primeira chamada: `accepted=true`, transição `heartbeat`;
+  - retry com payload idêntico: `accepted=false`, transição `duplicate`;
+  - mesmo `eventId` com status divergente: erro `event_id_conflict`;
+- persistência conferida: existe apenas 1 linha para `QA-SEC195-HB-001`, preservando o payload original (`status=online` e `source_at=2026-09-16T14:00:00Z`);
+- o teste não revelou nem exportou a chave de ingestão: o `key_hash` foi obtido somente por subquery server-side;
+- não havia asset sintético disponível no STAGE, portanto o caminho GPS foi validado por estrutura, função, guards e grants nesta rodada, sem criar dados artificiais adicionais.
+
+### PROD
+
+- não alterado.
+
 ## Critérios de aceite
 
 - retry idêntico continua idempotente;
