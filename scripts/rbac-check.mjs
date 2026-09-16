@@ -16,6 +16,7 @@ const telemetry = compact(read('packages/db/migrations/0006_device_telemetry.sql
 const community = compact(read('packages/db/migrations/0015_community.sql'));
 const operations = compact(read('packages/db/migrations/0016_operations_soc.sql'));
 const hardening = compact(read('packages/db/migrations/0017_stage_security_hardening.sql'));
+const operationsPrivacy = compact(read('packages/db/migrations/0033_operations_community_privacy_hardening.sql'));
 
 const propertyManager = devices.match(/CREATE OR REPLACE FUNCTION app_can_manage_property[\s\S]*?\$\$;/)?.[0] ?? '';
 
@@ -58,6 +59,18 @@ requireInvariant(
   'Operations/SOC must not imply contracted human monitoring or public dispatch.'
 );
 
+requireInvariant(
+  operationsPrivacy.includes("m.role='admin_neighborhood'") &&
+    operationsPrivacy.includes('AND p_property_id IS NULL') &&
+    operationsPrivacy.includes('AND p_neighborhood_id IS NOT NULL') &&
+    operationsPrivacy.includes('AND m.neighborhood_id=p_neighborhood_id'),
+  'Operations/SOC admin_neighborhood access must be community-only and must never include a private property_id.'
+);
+requireInvariant(
+  operationsPrivacy.includes('Never grants private farm visibility solely from neighborhood administration.'),
+  'Operations/SOC community/private privacy boundary comment must remain explicit.'
+);
+
 for (const table of ['spatial_ref_sys', 'geometry_columns', 'geography_columns']) {
   requireInvariant(
     hardening.includes(`REVOKE INSERT, UPDATE, DELETE ON TABLE public.${table} FROM authenticated`),
@@ -65,4 +78,4 @@ for (const table of ['spatial_ref_sys', 'geometry_columns', 'geography_columns']
   );
 }
 
-console.log('RBAC invariant check passed: private/community separation, ingestion boundary, SOC flags and PostGIS hardening preserved.');
+console.log('RBAC invariant check passed: private/community separation, Operations neighborhood boundary, ingestion boundary, SOC flags and PostGIS hardening preserved.');
