@@ -33,6 +33,7 @@
     "device-keys:check": "node scripts/device-key-rotation-check.mjs",
     "replay:check": "node scripts/ingest-replay-protection-check.mjs",
     "idempotency:check": "node scripts/idempotency-conflict-check.mjs",
+    "ingest-conflict:check": "node scripts/ingest-conflict-response-check.mjs",
     "deploy:check": "node scripts/deploy-readiness-check.mjs",
     "stage:smoke": "node scripts/stage-smoke.mjs",
     "test": "pnpm -r --if-present test",
