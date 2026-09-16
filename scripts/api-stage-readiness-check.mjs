@@ -15,11 +15,14 @@ req(config.includes('APP_NAME = "iFarm Security"'), 'APP_NAME changed unexpected
 req(config.includes('crons = ["*/5 * * * *"]'), '5-minute stale-device reconciliation cron must remain configured.');
 req(config.includes('workers_dev = true'), 'workers.dev endpoint must remain enabled until a dedicated API domain is approved.');
 req(config.includes('preview_urls = false'), 'preview URLs must remain disabled for the STAGE ingest Worker.');
+req(config.includes('name = "INGEST_DEVICE_RATE_LIMITER"'), 'device rate-limit binding must remain configured in STAGE.');
+req(config.includes('name = "INGEST_ROUTE_RATE_LIMITER"'), 'route rate-limit binding must remain configured in STAGE.');
 req(!/postgres(?:ql)?:\/\//i.test(config), 'database URL must never be committed in Wrangler config.');
 req(!/^\s*DATABASE_URL\s*=/m.test(config), 'DATABASE_URL must not be a plaintext Wrangler var.');
 
 req(rootPackage.scripts?.['api-stage:check'] === 'node scripts/api-stage-readiness-check.mjs', 'root api-stage:check script must remain registered.');
 req(rootPackage.scripts?.['api-security:check'] === 'node scripts/api-security-perimeter-check.mjs', 'root api-security:check script must remain registered.');
+req(rootPackage.scripts?.['rate-limit:check'] === 'node scripts/distributed-rate-limit-check.mjs', 'root rate-limit:check script must remain registered.');
 
 for (const expected of [
   "github.repository == 'VictorHugoSimon/ifarm-security-platform'",
@@ -34,10 +37,11 @@ for (const expected of [
   '--strict',
   'pnpm api-stage:check',
   'pnpm api-security:check',
+  'pnpm rate-limit:check',
   '-D "$HEALTH_HEADERS" "$API_URL/health"',
   'curl --fail --silent --show-error --max-time 20 "$API_URL/ready"',
   'curl --fail --silent --show-error --max-time 20 "$API_URL/api/v1/system/status"',
-  '"distributedRateLimitingConfigured":false',
+  '"distributedRateLimitingConfigured":true',
   '"error":"method_not_allowed"'
 ]) req(workflow.includes(expected), `API STAGE workflow missing invariant: ${expected}`);
 
@@ -57,11 +61,11 @@ for (const expected of [
   "app.post('/api/v1/ingest/devices/:deviceId/heartbeat'",
   "app.post('/api/v1/ingest/assets/:assetId/position'",
   'scheduled(_controller, env, ctx)',
-  'distributedRateLimitingConfigured: false',
+  'distributedRateLimitingConfigured: rateLimiterConfigured(c.env)',
   'MAX_INGEST_BODY_BYTES = 32768',
   'app.notFound('
 ]) req(api.includes(expected), `API runtime readiness primitive missing: ${expected}`);
 
 req(api.includes('humanMonitoringAssumed: false') && api.includes('publicDispatchEnabled: false') && api.includes('governmentIntegration: false') && api.includes('biometricMatching: false'), 'API system safety flags must remain fail-closed.');
 
-console.log('API STAGE readiness check passed: isolated Worker contract, server-only database secret, security perimeter, dry-run, smoke endpoints and fail-closed safety flags preserved.');
+console.log('API STAGE readiness check passed: isolated Worker contract, server-only database secret, distributed rate limiting, security perimeter, dry-run, smoke endpoints and fail-closed safety flags preserved.');
