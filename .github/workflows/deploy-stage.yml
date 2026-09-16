@@ -85,6 +85,7 @@ jobs:
           pnpm rate-limit:check
           pnpm device-keys:check
           pnpm replay:check
+          pnpm idempotency:check
           pnpm deploy:check
 
       - name: Install dependencies

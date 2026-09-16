@@ -37,6 +37,7 @@ requireInvariant(rootPackage.scripts?.['api-security:check'] === 'node scripts/a
 requireInvariant(rootPackage.scripts?.['rate-limit:check'] === 'node scripts/distributed-rate-limit-check.mjs', 'distributed rate limiting gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['device-keys:check'] === 'node scripts/device-key-rotation-check.mjs', 'device key lifecycle gate must remain registered.');
 requireInvariant(rootPackage.scripts?.['replay:check'] === 'node scripts/ingest-replay-protection-check.mjs', 'ingest replay protection gate must remain registered.');
+requireInvariant(rootPackage.scripts?.['idempotency:check'] === 'node scripts/idempotency-conflict-check.mjs', 'idempotency conflict gate must remain registered.');
 requireInvariant(webPackage.scripts?.build === 'tsc -b && vite build', 'web build contract changed unexpectedly.');
 requireInvariant(viteConfig.includes('defineConfig') && viteConfig.includes('react()'), 'web must remain a Vite React application.');
 requireInvariant(redirects === '/* /index.html 200', 'Cloudflare Pages SPA fallback must rewrite unknown paths to index.html with status 200.');
@@ -54,13 +55,8 @@ for (const expected of ['Project: `ifarm-security-web-stage`','Root directory: r
 requireInvariant(cloudflareContract.includes('NÃO habilitar uso real enquanto'), 'Cloudflare contract must keep the explicit real-use blocker.');
 
 for (const expected of [
-  'IFARM_SECURITY_CF_PROJECT: ifarm-security-web-stage',
-  'secrets.IFARM_SECURITY_CLOUDFLARE_API_TOKEN',
-  'secrets.IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID',
-  'wrangler@4.130.0 pages project create',
-  'wranglerVersion: "4.130.0"',
-  '--project-name=${{ env.IFARM_SECURITY_CF_PROJECT }} --branch=stage',
-  'pnpm privileges:check','pnpm invitations:check','pnpm memberships:check','pnpm access-audit:check','pnpm navigation:check','pnpm access-navigation:check','pnpm access-landing:check','pnpm support:check','pnpm privacy:check','pnpm pilot:check','pnpm http-security:check','pnpm auth:check','pnpm auth-provider:check','pnpm admin-bootstrap:check','pnpm admin-lifecycle:check','pnpm backup:check','pnpm evidence-storage:check','pnpm alert-delivery:check','pnpm rate-limit:check','pnpm device-keys:check','pnpm replay:check',
+  'IFARM_SECURITY_CF_PROJECT: ifarm-security-web-stage','secrets.IFARM_SECURITY_CLOUDFLARE_API_TOKEN','secrets.IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID','wrangler@4.130.0 pages project create','wranglerVersion: "4.130.0"','--project-name=${{ env.IFARM_SECURITY_CF_PROJECT }} --branch=stage',
+  'pnpm privileges:check','pnpm invitations:check','pnpm memberships:check','pnpm access-audit:check','pnpm navigation:check','pnpm access-navigation:check','pnpm access-landing:check','pnpm support:check','pnpm privacy:check','pnpm pilot:check','pnpm http-security:check','pnpm auth:check','pnpm auth-provider:check','pnpm admin-bootstrap:check','pnpm admin-lifecycle:check','pnpm backup:check','pnpm evidence-storage:check','pnpm alert-delivery:check','pnpm rate-limit:check','pnpm device-keys:check','pnpm replay:check','pnpm idempotency:check',
   'test -f apps/web/dist/_headers','test -f apps/web/dist/robots.txt','cmp apps/web/public/_headers apps/web/dist/_headers','pnpm stage:smoke',
   "github.repository == 'VictorHugoSimon/ifarm-security-platform'","github.ref == 'refs/heads/main'",'${{ github.event.repository.visibility }}','iFarm Security repository must be private before any Cloudflare deployment'
 ]) requireInvariant(stageWorkflow.includes(expected), `STAGE Pages deploy workflow missing invariant: ${expected}`);
@@ -74,21 +70,7 @@ requireInvariant(!stageWorkflow.includes('secrets.CLOUDFLARE_ACCOUNT_ID'), 'gene
 requireInvariant(!/(?:DATABASE_URL|POSTGRES_URL|NEON_API_KEY|NEON_DATABASE_URL)/.test(stageWorkflow), 'STAGE Pages workflow must not receive privileged database credentials.');
 
 for (const expected of [
-  'IFARM_SECURITY_API_STAGE_WORKER: ifarm-security-api-stage',
-  'secrets.IFARM_SECURITY_CLOUDFLARE_API_TOKEN',
-  'secrets.IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID',
-  'secrets.IFARM_SECURITY_STAGE_DATABASE_URL',
-  'pnpm api-stage:check',
-  'pnpm api-security:check',
-  'pnpm rate-limit:check',
-  'pnpm device-keys:check',
-  'pnpm replay:check',
-  '--config apps/api/wrangler.stage.toml',
-  '--secrets-file "$SECRET_FILE"',
-  '-D "$HEALTH_HEADERS" "$API_URL/health"',
-  'curl --fail --silent --show-error --max-time 20 "$API_URL/ready"',
-  '"distributedRateLimitingConfigured":true',
-  '"error":"method_not_allowed"'
+  'IFARM_SECURITY_API_STAGE_WORKER: ifarm-security-api-stage','secrets.IFARM_SECURITY_CLOUDFLARE_API_TOKEN','secrets.IFARM_SECURITY_CLOUDFLARE_ACCOUNT_ID','secrets.IFARM_SECURITY_STAGE_DATABASE_URL','pnpm api-stage:check','pnpm api-security:check','pnpm rate-limit:check','pnpm device-keys:check','pnpm replay:check','pnpm idempotency:check','--config apps/api/wrangler.stage.toml','--secrets-file "$SECRET_FILE"','-D "$HEALTH_HEADERS" "$API_URL/health"','curl --fail --silent --show-error --max-time 20 "$API_URL/ready"','"distributedRateLimitingConfigured":true','"error":"method_not_allowed"'
 ]) requireInvariant(apiStageWorkflow.includes(expected), `STAGE API deploy workflow missing invariant: ${expected}`);
 const apiPrivateGate = apiStageWorkflow.indexOf('- name: Require private repository');
 const apiCredentialGate = apiStageWorkflow.indexOf('- name: Require isolated deployment credentials');
@@ -99,4 +81,4 @@ requireInvariant(!apiStageWorkflow.includes('secrets.CLOUDFLARE_ACCOUNT_ID'), 'g
 requireInvariant(!apiStageWorkflow.includes('secrets.DATABASE_URL'), 'generic database secret is forbidden in API workflow.');
 requireInvariant(!apiStageWorkflow.includes('ifarm-security-api-prod'), 'PROD API Worker must remain outside STAGE deploy workflow.');
 
-console.log('Deploy readiness check passed: Pages and API STAGE remain isolated behind private-repo, dedicated credentials, distributed rate limiting, replay protection, security/readiness/device-key gates and smoke checks.');
+console.log('Deploy readiness check passed: Pages and API STAGE remain isolated behind private-repo, dedicated credentials, distributed rate limiting, replay/idempotency protection, security/readiness/device-key gates and smoke checks.');
