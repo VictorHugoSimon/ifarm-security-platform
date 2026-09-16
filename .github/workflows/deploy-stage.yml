@@ -89,6 +89,7 @@ jobs:
           pnpm ingest-conflict:check
           pnpm api-idempotency:check
           pnpm heartbeat-ordering:check
+          pnpm telemetry-timing:check
           pnpm deploy:check
 
       - name: Install dependencies
