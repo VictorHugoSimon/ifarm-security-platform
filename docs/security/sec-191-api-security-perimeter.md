@@ -18,13 +18,11 @@ Endurecer o Worker de ingestão do iFarm Security antes da primeira exposição 
 
 ## Rate limiting
 
-Este hardening **não substitui rate limiting distribuído**. Um limite em memória dentro de um Worker não seria garantia confiável entre isolates/regiões e, portanto, não será apresentado como controle de segurança real.
+Este hardening **não substitui rate limiting distribuído**. Um limite em memória dentro de um Worker não seria garantia confiável entre isolates/regiões e, portanto, não é apresentado como controle real.
 
-Enquanto não houver política de borda aprovada e testada, `/api/v1/system/status` deve manter:
+No momento da SEC-191, `/api/v1/system/status` mantinha `distributedRateLimitingConfigured=false`. Esse bloqueio foi posteriormente tratado pela **SEC-193 — Distributed Rate Limiting**, que adiciona bindings nativos do Cloudflare, chave por credencial de dispositivo hasheada e comportamento fail-closed em STAGE/PROD. A SEC-193 passa a ser a autoridade para esse controle.
 
-`distributedRateLimitingConfigured=false`
-
-Antes de dispositivos reais no STAGE, definir e validar uma solução de borda compatível com Cloudflare para limitar abuso por IP/origem/chave sem bloquear conectividade rural legítima. A política precisa considerar retries, conectividade intermitente e rajadas após buffer offline.
+A proteção distribuída deve continuar considerando retries, conectividade intermitente e rajadas após buffer offline, sem depender de IP compartilhado por NAT/CGNAT rural.
 
 ## Contrato dos endpoints de ingestão
 
@@ -43,16 +41,15 @@ Antes de dispositivos reais no STAGE, definir e validar uma solução de borda c
 3. método incorreto em rota conhecida retorna 405 sem revelar implementação;
 4. rota inexistente retorna 404 sanitizado;
 5. respostas recebem headers defensivos e `Cache-Control: no-store`;
-6. `distributedRateLimitingConfigured` permanece `false` até controle de borda real;
+6. estado do rate limiting é reportado honestamente; a configuração distribuída real é governada pela SEC-193;
 7. testes automatizados e `pnpm api-security:check` passam;
 8. o gate passa a ser obrigatório na CI e no workflow de deploy API STAGE;
 9. nenhum recurso PROD é criado ou modificado.
 
-## Fora de escopo
+## Fora de escopo original da SEC-191
 
-- WAF/rate limiting distribuído real;
+- rate limiting distribuído real — posteriormente tratado pela SEC-193;
 - mTLS de dispositivo;
-- rotação automática de device keys;
 - custom domain da API;
 - integração governamental/biometria;
 - mudança de PROD.
