@@ -81,6 +81,8 @@ jobs:
         run: pnpm device-keys:check
       - name: Ingest replay protection invariants
         run: pnpm replay:check
+      - name: Idempotency conflict invariants
+        run: pnpm idempotency:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies
