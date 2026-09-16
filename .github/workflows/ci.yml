@@ -77,6 +77,8 @@ jobs:
         run: pnpm api-security:check
       - name: Distributed rate limiting invariants
         run: pnpm rate-limit:check
+      - name: Replay safety invariants
+        run: pnpm replay:check
       - name: Device key lifecycle invariants
         run: pnpm device-keys:check
       - name: Deploy readiness invariants
