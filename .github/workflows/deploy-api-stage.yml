@@ -64,6 +64,7 @@ jobs:
           pnpm device-keys:check
           pnpm replay:check
           pnpm idempotency:check
+          pnpm ingest-conflict:check
 
       - name: Test and typecheck API
         run: |
@@ -143,4 +144,4 @@ jobs:
           echo "### iFarm Security API STAGE" >> "$GITHUB_STEP_SUMMARY"
           echo "- Worker: $IFARM_SECURITY_API_STAGE_WORKER" >> "$GITHUB_STEP_SUMMARY"
           echo "- URL: $API_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "- health/ready/system-status/security-perimeter/distributed-rate-limit/replay/idempotency smoke: passed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- health/ready/system-status/security-perimeter/distributed-rate-limit/replay/idempotency/conflict-response smoke: passed" >> "$GITHUB_STEP_SUMMARY"

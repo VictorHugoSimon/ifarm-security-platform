@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { app } from '../src/index.ts';
+import { app, isIdempotencyConflictError } from '../src/index.ts';
 
 const baseEnv = { APP_ENV: 'test', APP_NAME: 'iFarm Security' };
 const fakeDbEnv = { ...baseEnv, DATABASE_URL: 'postgresql://placeholder.invalid/ifarm_security' };
@@ -9,6 +9,13 @@ const rawDeviceKey = 'x'.repeat(32);
 const validDeviceKey = `Device ${rawDeviceKey}`;
 
 async function json(response: Response) { return response.json() as Promise<Record<string, unknown>>; }
+
+test('idempotency conflict classifier only matches the explicit database signal', () => {
+  assert.equal(isIdempotencyConflictError('NeonDbError: event_id_conflict'), true);
+  assert.equal(isIdempotencyConflictError('invalid_event_id'), false);
+  assert.equal(isIdempotencyConflictError('unique_violation'), false);
+  assert.equal(isIdempotencyConflictError(''), false);
+});
 
 test('health is liveness and does not require database', async () => {
   const response = await app.request('/health', {}, baseEnv);

@@ -107,6 +107,7 @@ async function sha256Hex(value: string) {
 }
 function deviceKeyFromAuthorization(value?: string) { if (!value?.startsWith('Device ')) return ''; return value.slice('Device '.length).trim(); }
 function validMetadata(value: unknown) { if (!value || Array.isArray(value) || typeof value !== 'object') return {}; return value as Record<string, unknown>; }
+export function isIdempotencyConflictError(message: string) { return message.includes('event_id_conflict'); }
 function rateLimiterConfigured(env: Bindings) { return Boolean(env.INGEST_DEVICE_RATE_LIMITER && env.INGEST_ROUTE_RATE_LIMITER); }
 function rateLimiterRequired(env: Bindings) { return env.APP_ENV === 'stage' || env.APP_ENV === 'production'; }
 
@@ -192,6 +193,10 @@ app.post('/api/v1/ingest/devices/:deviceId/heartbeat', async (c) => {
     return c.json({ accepted: row.accepted, status: row.current_status, receivedAt: row.received_at, transition: row.transition }, 202);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
+    if (isIdempotencyConflictError(message)) {
+      structuredLog('warn', 'ingest_idempotency_conflict', { requestId: c.get('requestId'), environment: c.env.APP_ENV, route: 'heartbeat' });
+      return c.json({ error: 'event_id_conflict', requestId: c.get('requestId') }, 409);
+    }
     if (message.includes('invalid_device_key')) return c.json({ error: 'unauthorized' }, 401);
     if (message.includes('source_time_in_future') || message.includes('invalid_')) return c.json({ error: 'invalid_heartbeat' }, 400);
     structuredLog('error', 'heartbeat_ingest_failed', { requestId: c.get('requestId'), environment: c.env.APP_ENV }); return c.json({ error: 'internal_error' }, 500);
@@ -225,6 +230,10 @@ app.post('/api/v1/ingest/assets/:assetId/position', async (c) => {
     return c.json({ accepted: row.accepted, insideGeofence: row.inside_geofence, transition: row.transition, receivedAt: row.received_at }, 202);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
+    if (isIdempotencyConflictError(message)) {
+      structuredLog('warn', 'ingest_idempotency_conflict', { requestId: c.get('requestId'), environment: c.env.APP_ENV, route: 'asset-position' });
+      return c.json({ error: 'event_id_conflict', requestId: c.get('requestId') }, 409);
+    }
     if (message.includes('invalid_device_key')) return c.json({ error: 'unauthorized' }, 401);
     if (message.includes('asset_device_mismatch')) return c.json({ error: 'device_not_linked_to_asset' }, 403);
     if (message.includes('asset_not_found')) return c.json({ error: 'asset_not_found' }, 404);

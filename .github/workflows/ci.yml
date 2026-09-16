@@ -83,6 +83,8 @@ jobs:
         run: pnpm replay:check
       - name: Idempotency conflict invariants
         run: pnpm idempotency:check
+      - name: Ingest conflict response invariants
+        run: pnpm ingest-conflict:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies

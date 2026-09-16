@@ -86,6 +86,7 @@ jobs:
           pnpm device-keys:check
           pnpm replay:check
           pnpm idempotency:check
+          pnpm ingest-conflict:check
           pnpm deploy:check
 
       - name: Install dependencies
