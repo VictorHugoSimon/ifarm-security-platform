@@ -62,6 +62,7 @@ jobs:
           pnpm api-security:check
           pnpm rate-limit:check
           pnpm device-keys:check
+          pnpm replay:check
 
       - name: Test and typecheck API
         run: |
@@ -141,4 +142,4 @@ jobs:
           echo "### iFarm Security API STAGE" >> "$GITHUB_STEP_SUMMARY"
           echo "- Worker: $IFARM_SECURITY_API_STAGE_WORKER" >> "$GITHUB_STEP_SUMMARY"
           echo "- URL: $API_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "- health/ready/system-status/security-perimeter/distributed-rate-limit smoke: passed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- health/ready/system-status/security-perimeter/distributed-rate-limit/replay-protection smoke: passed" >> "$GITHUB_STEP_SUMMARY"
