@@ -22,6 +22,32 @@ Consequences:
 
 The lock is transaction-scoped, so it is released automatically on commit/rollback and does not create a persistent application lock.
 
-## Validation target
+## Validation evidence
 
-Apply migration `0032_asset_position_concurrency_safety.sql` in DEV first, then STAGE. Confirm the wrapper contains the per-asset advisory lock, remains inaccessible to `authenticated`/`anonymous`, and preserves the existing replay/idempotency semantics. PROD remains outside this change until a separate promotion gate.
+Validated on 2026-09-17 in the dedicated iFarm Security Neon project.
+
+### DEV
+
+- migration `0032_asset_position_concurrency_safety.sql` applied successfully;
+- function definition contains `pg_advisory_xact_lock`;
+- lock namespace `ifarm_security_asset_position` confirmed;
+- `authenticated` EXECUTE = false;
+- `anonymous` EXECUTE = false.
+
+### STAGE
+
+- the same migration applied successfully;
+- per-asset advisory lock confirmed in the live function definition;
+- dedicated lock namespace confirmed;
+- `authenticated` EXECUTE = false;
+- `anonymous` EXECUTE = false.
+
+The CI gate also verifies that duplicate/idempotency conflict behavior remains present and that no browser role receives EXECUTE.
+
+## Promotion status
+
+DEV: validated.
+
+STAGE: validated.
+
+PROD: intentionally untouched. Promotion to PROD remains a separate gated decision.
