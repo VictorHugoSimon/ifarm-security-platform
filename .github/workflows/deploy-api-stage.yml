@@ -63,6 +63,8 @@ jobs:
           pnpm api-idempotency:check
           pnpm heartbeat-ordering:check
           pnpm asset-position-ordering:check
+          pnpm gps-timestamp-tie:check
+          pnpm deploy-gate-parity:check
       - name: Test and typecheck API
         run: |
           pnpm --filter @ifarm-security/api test
@@ -125,4 +127,4 @@ jobs:
           echo "### iFarm Security API STAGE" >> "$GITHUB_STEP_SUMMARY"
           echo "- Worker: $IFARM_SECURITY_API_STAGE_WORKER" >> "$GITHUB_STEP_SUMMARY"
           echo "- URL: $API_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "- health/ready/system-status/security-perimeter/distributed-rate-limit/replay/idempotency/conflict-response/api-idempotency/heartbeat-ordering/asset-position-ordering smoke: passed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- health/ready/system-status/security-perimeter/distributed-rate-limit/replay/idempotency/conflict-response/api-idempotency/heartbeat-ordering/asset-position-ordering/gps-timestamp-tie smoke: passed" >> "$GITHUB_STEP_SUMMARY"
