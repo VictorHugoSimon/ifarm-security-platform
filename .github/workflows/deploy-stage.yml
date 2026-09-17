@@ -79,6 +79,8 @@ jobs:
           pnpm api-idempotency:check
           pnpm heartbeat-ordering:check
           pnpm asset-position-ordering:check
+          pnpm gps-timestamp-tie:check
+          pnpm deploy-gate-parity:check
           pnpm deploy:check
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
