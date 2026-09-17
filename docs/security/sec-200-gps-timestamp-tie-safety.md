@@ -28,6 +28,28 @@ Therefore:
 
 The migration inspects the actual prior function definition and aborts if the expected old comparison is not present. It is idempotent if the strict comparison has already been installed.
 
-## Promotion
+## Validation evidence — 2026-09-17
 
-Apply first in DEV, validate the live function definition, then promote the same migration to STAGE. PROD remains outside this change until a separate promotion decision.
+### DEV
+
+Migration `0033` applied successfully. Live `pg_get_functiondef` validation returned:
+
+- strict `p_recorded_at > v_last_position`: present;
+- old `p_recorded_at >= v_last_position`: absent.
+
+### STAGE
+
+The same migration applied successfully and returned the same live validation:
+
+- strict comparison: present;
+- old non-strict comparison: absent.
+
+STAGE currently has no persisted Asset/GPS fixture. No artificial device credential or synthetic asset was created solely to force an end-to-end test; this avoids expanding the credential surface for test convenience. Static CI verifies the migration contract and live DB inspection verifies the resulting function definition.
+
+## Promotion status
+
+DEV: validated.
+
+STAGE: validated.
+
+PROD: intentionally untouched. Promotion remains a separate gated decision.
