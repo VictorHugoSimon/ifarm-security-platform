@@ -91,6 +91,8 @@ jobs:
         run: pnpm heartbeat-ordering:check
       - name: Asset position ordering invariants
         run: pnpm asset-position-ordering:check
+      - name: GPS timestamp tie invariants
+        run: pnpm gps-timestamp-tie:check
       - name: Deploy readiness invariants
         run: pnpm deploy:check
       - name: Install dependencies
