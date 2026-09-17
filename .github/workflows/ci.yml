@@ -93,6 +93,8 @@ jobs:
         run: pnpm asset-position-ordering:check
       - name: GPS timestamp tie invariants
         run: pnpm gps-timestamp-tie:check
+      - name: Telemetry timing observability invariants
+        run: pnpm telemetry-timing:check
       - name: Deploy gate parity invariants
         run: pnpm deploy-gate-parity:check
       - name: Deploy readiness invariants

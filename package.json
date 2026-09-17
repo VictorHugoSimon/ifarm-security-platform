@@ -38,6 +38,7 @@
     "heartbeat-ordering:check": "node scripts/heartbeat-ordering-safety-check.mjs",
     "asset-position-ordering:check": "node scripts/asset-position-ordering-check.mjs",
     "gps-timestamp-tie:check": "node scripts/gps-timestamp-tie-check.mjs",
+    "telemetry-timing:check": "node scripts/telemetry-timing-observability-check.mjs",
     "deploy-gate-parity:check": "node scripts/deploy-gate-parity-check.mjs",
     "deploy:check": "node scripts/deploy-readiness-check.mjs",
     "stage:smoke": "node scripts/stage-smoke.mjs",

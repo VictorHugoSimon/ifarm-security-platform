@@ -8,7 +8,8 @@ const requireInvariant = (condition, message) => { if (!condition) fail(message)
 const requiredIngestGates = [
   'pnpm heartbeat-ordering:check',
   'pnpm asset-position-ordering:check',
-  'pnpm gps-timestamp-tie:check'
+  'pnpm gps-timestamp-tie:check',
+  'pnpm telemetry-timing:check'
 ];
 
 for (const gate of requiredIngestGates) {
@@ -19,4 +20,4 @@ for (const gate of requiredIngestGates) {
 requireInvariant(pages.indexOf('Require private repository') < pages.indexOf('Require isolated Cloudflare credentials'), 'Pages privacy gate must precede credentials.');
 requireInvariant(api.indexOf('Require private repository') < api.indexOf('Require isolated deployment credentials'), 'API privacy gate must precede deployment credentials.');
 
-console.log('Deploy gate parity check passed: heartbeat, asset concurrency and GPS tie safety gates are enforced by both STAGE deployment paths.');
+console.log('Deploy gate parity check passed: heartbeat, asset concurrency, GPS tie safety and telemetry timing observability gates are enforced by both STAGE deployment paths.');
